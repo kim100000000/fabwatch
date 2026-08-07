@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: fabwatch-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: fabwatch
+      MYSQL_ROOT_PASSWORD: fabwatch_root_local
+      MYSQL_USER: fabwatch
+      MYSQL_PASSWORD: fabwatch_local
+      TZ: UTC
+    ports:
+      - "3306:3306"
+    volumes:
+      - fabwatch_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pfabwatch_root_local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  fabwatch_mysql_data:

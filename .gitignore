@@ -1,0 +1,29 @@
+# 환경변수/비밀값 (docs/13 §3, docs/11 §5)
+.env
+.env.local
+backend/src/main/resources/application-local.yml
+
+# Backend (Gradle/Java)
+backend/.gradle/
+backend/build/
+backend/out/
+backend/!gradle/wrapper/gradle-wrapper.jar
+*.class
+*.jar
+!gradle-wrapper.jar
+
+# Frontend (Vite/Node)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.log
+npm-debug.log*
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# OS
+Thumbs.db
