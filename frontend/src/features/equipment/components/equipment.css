@@ -1,0 +1,220 @@
+/* 설비 도메인 전용 스타일 — 색상은 전역 토큰만 사용 */
+
+/* ---------- 목록 툴바 ---------- */
+.equipment-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.status-filter {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.filter-chip:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.filter-chip.active {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.filter-chip[data-status='RUN'].active { border-color: var(--status-run); }
+.filter-chip[data-status='IDLE'].active { border-color: var(--status-idle); }
+.filter-chip[data-status='DOWN'].active { border-color: var(--status-down); }
+.filter-chip[data-status='PM'].active { border-color: var(--status-pm); }
+
+.view-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.view-toggle button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.view-toggle button.active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ---------- 설비 카드 그리드 ---------- */
+.equipment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.equipment-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--status-idle); /* 상태 좌측 보더 4px (docs/04 §3) */
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  width: 100%;
+}
+
+.equipment-card:hover {
+  background: var(--bg-hover);
+}
+
+.equipment-card[data-status='RUN'] { border-left-color: var(--status-run); }
+.equipment-card[data-status='IDLE'] { border-left-color: var(--status-idle); }
+.equipment-card[data-status='DOWN'] { border-left-color: var(--status-down); }
+.equipment-card[data-status='PM'] { border-left-color: var(--status-pm); }
+
+.equipment-card .card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.equipment-card .card-code {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.equipment-card .card-name {
+  color: var(--text-primary);
+}
+
+.equipment-card .card-meta {
+  display: flex;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.alarm-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--alarm-major);
+}
+
+.alarm-count[data-zero='true'] {
+  color: var(--text-secondary);
+}
+
+/* 1024px 이하: 카드 2열 → 1열 (docs/04 §1) */
+@media (max-width: 1024px) {
+  .equipment-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- 상세(S-3) ---------- */
+.detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.detail-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail-title .detail-code {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.detail-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px 24px;
+  margin-bottom: 20px;
+}
+
+.detail-info dt {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.detail-info dd {
+  margin: 2px 0 0;
+  font-family: var(--font-mono);
+}
+
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+.tab-bar button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.tab-bar button:hover {
+  color: var(--text-primary);
+}
+
+.tab-bar button.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.tab-panel {
+  min-height: 220px;
+}
+
+.placeholder-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  font-size: 12px;
+}

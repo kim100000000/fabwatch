@@ -1,0 +1,224 @@
+/* S-1 레이아웃 (docs/04 §3): 헤더(로고/라인선택/교대/사용자) + 좌측 사이드바 */
+
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  grid-template-rows: var(--header-h) 1fr;
+  grid-template-areas:
+    'header header'
+    'sidebar main';
+  min-height: 100vh;
+}
+
+/* ---------- 헤더 ---------- */
+.app-header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.app-logo {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--text-primary);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.app-logo .logo-mark {
+  color: var(--accent);
+  font-size: 16px;
+}
+
+.app-logo .logo-sub {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.header-spacer {
+  flex: 1;
+}
+
+.line-select {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.line-select:focus {
+  border-color: var(--accent);
+}
+
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-user .user-name {
+  font-weight: 600;
+}
+
+.header-user .user-role {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.logout-btn {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.logout-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+/* ---------- 사이드바 ---------- */
+.app-sidebar {
+  grid-area: sidebar;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px; /* 태블릿 터치 타겟 */
+  padding: 0 12px;
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.nav-item.active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.nav-item .nav-icon {
+  width: 20px;
+  text-align: center;
+  font-size: 15px;
+}
+
+.nav-screen {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+/* ---------- 본문 ---------- */
+.app-main {
+  grid-area: main;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+/* 1024px 이하: 사이드바 아이콘만 표시 */
+@media (max-width: 1024px) {
+  .nav-item .nav-label,
+  .nav-screen,
+  .app-logo .logo-sub {
+    display: none;
+  }
+
+  .nav-item {
+    justify-content: center;
+    padding: 0;
+  }
+}
+
+/* ---------- 로그인 화면(S-0) ---------- */
+.login-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  padding: 32px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.login-brand {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.login-brand h1 {
+  font-size: 24px;
+  letter-spacing: 0.04em;
+}
+
+.login-brand h1 span {
+  color: var(--accent);
+}
+
+.login-brand p {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.login-hint {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.login-hint code {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+/* ---------- 전체 화면 로딩 ---------- */
+.app-booting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  color: var(--text-secondary);
+  gap: 10px;
+}

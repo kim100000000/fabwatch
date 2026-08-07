@@ -1,0 +1,62 @@
+import { StatusBadge } from '@/shared/ui'
+import type { EquipmentSummary } from '../types'
+import './equipment.css'
+
+interface EquipmentTableProps {
+  equipments: EquipmentSummary[]
+  onSelect: (equipmentId: number) => void
+}
+
+/** 설비 목록 테이블 (S-2) — 행 클릭 시 S-3 상세로 이동 */
+export function EquipmentTable({ equipments, onSelect }: EquipmentTableProps) {
+  return (
+    <div className="table-scroll">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>설비 코드</th>
+            <th>설비명</th>
+            <th>상태</th>
+            <th>라인 / 공정</th>
+            <th>모델</th>
+            <th>제조사</th>
+            <th>담당</th>
+            <th>미해결 알람</th>
+          </tr>
+        </thead>
+        <tbody>
+          {equipments.map((equipment) => (
+            <tr
+              key={equipment.id}
+              onClick={() => onSelect(equipment.id)}
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') onSelect(equipment.id)
+              }}
+            >
+              <td className="mono">{equipment.code}</td>
+              <td>{equipment.name}</td>
+              <td>
+                <StatusBadge status={equipment.status} />
+              </td>
+              <td>{formatLocation(equipment)}</td>
+              <td>{equipment.modelName ?? '-'}</td>
+              <td>{equipment.maker ?? '-'}</td>
+              <td>{equipment.managerName ?? '-'}</td>
+              <td>
+                <span className="alarm-count" data-zero={!equipment.openAlarmCount}>
+                  {equipment.openAlarmCount ?? 0}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function formatLocation(equipment: EquipmentSummary): string {
+  const parts = [equipment.lineName, equipment.processName].filter(Boolean)
+  return parts.length > 0 ? parts.join(' / ') : '-'
+}

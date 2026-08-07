@@ -1,0 +1,20 @@
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-submit {
+  margin-top: 4px;
+  width: 100%;
+}
+
+.login-error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--alarm-critical);
+  border-radius: var(--radius);
+  background: var(--bg-base);
+  color: var(--alarm-critical);
+  font-size: 13px;
+}

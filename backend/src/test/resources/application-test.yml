@@ -1,0 +1,24 @@
+# 테스트 프로파일 (docs/13 §2) — 로컬 MySQL 없이 H2 인메모리로 돌린다.
+# MODE=MySQL: 백틱 인용 식별자 등 MySQL 문법 호환 / NON_KEYWORDS=VALUE: sensor_data.value 컬럼명 사용
+spring:
+  datasource:
+    url: jdbc:h2:mem:fabwatch;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;NON_KEYWORDS=VALUE
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+fabwatch:
+  jwt:
+    secret: fabwatch-test-secret-key-0123456789-0123456789-0123456789
+  cors:
+    allowed-origins: http://localhost:5173
+  seed:
+    enabled: false
+
+logging:
+  level:
+    com.fabwatch: INFO

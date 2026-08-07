@@ -30,6 +30,10 @@
 | 역할 명칭 | TECHNICIAN 유지 (MAINTENANCE로 변경 안 함) | 역할=사람(테크니션), Maintenance=업무 용어로만 사용 (메뉴/이력서) |
 | 아키텍처 | 모듈러 모놀리스 (MSA 안 함) | 도메인 우선 패키지 + 도메인 간 이벤트 통신. 분리 1순위: simulator, aireport. 근거·면접답변 docs/10 |
 | 폴더 구조 | 백엔드: 도메인별 수직 분할 / 프론트: FSD 라이트(app·pages·features·shared) | 상세는 CLAUDE.md 프로젝트 구조 섹션 |
+| 테스트 DB | H2(MySQL 모드) 인메모리 | Docker 없어도 `./gradlew test`로 전체 검증 가능. 로컬 실행은 여전히 docker-compose MySQL8 |
+| refresh_token 저장 | docs/05 `users.refresh_token` 컬럼 방식 채택 (docs/11이 언급한 별도 refresh_tokens 테이블 대신) + `refresh_token_expires_at`/`failed_login_count`/`locked_until` 3컬럼 추가 | docs/11 §2(14일 만료·5회/15분 잠금) 저장할 자리가 docs/05에 없어서 보완 |
+| `lines` 테이블명 | 백틱 인용 매핑 | MySQL 예약어 충돌 |
+| 도메인 간 FK | JPA 연관관계 대신 Long ID만 보관, 이름 조회는 서비스 인터페이스로 | "도메인 간 직접 참조 금지" 원칙을 FK 레벨까지 적용 |
 
 ## 3. 문서 지도
 
@@ -61,10 +65,19 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 - [x] 2026-07-06: CLAUDE.md + docs/09_체크리스트.md 작성, 역할 명칭 TECHNICIAN 확정
 - [x] 2026-07-06: 아키텍처 확정(모듈러 모놀리스) + 폴더 구조 확정 + docs/10 ADR 작성
 - [x] 2026-07-07: docs/11 보안명세서 작성 + docs/12~15 신규 명세서 4종 작성 (테스트·배포운영·용어사전·성능부하)
+- [x] 2026-08-07: 비판적 리스크 검토 후 docs 5종 수정 (01/03/07/08/11) + 하네스(.claude/agents,skills) 구성
+- [x] 2026-08-07: **1주차 셋업 완료** — git init, docker-compose(MySQL8), .gitignore, .env.example
+- [x] 2026-08-07: **백엔드** Spring Boot 프로젝트 골격 + JPA 엔티티 15개(도메인별 배치, 미구현 도메인은 common/entity에 임시 배치) + 시드(CommandLineRunner) + F-1 인증(JWT 로그인/리프레시/로그아웃, 5회 잠금) + F-2 설비마스터(라인/공정/설비 CRUD, 상태머신 4x4 전이, 상태로그) — `./gradlew build/test` 49개 전부 통과
+- [x] 2026-08-07: **프론트엔드** Vite+React18+TS, FSD라이트(app/pages/features{auth,equipment}/shared), 8개 라우트(S-0~S-8, 실구현은 S-0/S-2/S-3+레이아웃, 나머지 스텁), axios 인터셉터(401→refresh 자동), 디자인 토큰 전량 적용 — `npm run build` 통과
+- [x] 2026-08-07: **QA 1라운드** — 경계면 검증 21항목 통과, 5건 발견·수정(`/lines` 페이지래핑 unwrap 안 하면 헤더 크래시였음, refresh user 필드 미사용, logout 불필요 바디, 목록 DTO modelName/maker 누락, 에러코드 매핑 불일치). 재검증 후 백엔드 49/프론트 build 전부 그린. 리포트: `.claude/_workspace/qa/1주차_인증설비마스터_20260807.md`
 
-### 미착수 (코드는 아직 한 줄도 없음)
-- [ ] 1주차: 프로젝트 셋업 (Spring Boot + React + MySQL + Git) ← **다음 작업**
-- [ ] 1주차: DB 스키마 + 시드, 인증(F-1), 설비 마스터(F-2)
+### 1주차 알려진 미완료 (2주차 착수 전 정리 권장)
+- [ ] S-2 설비 등록/수정 폼 없음 (백엔드 API는 완성, 프론트 미연결)
+- [ ] S-3 "상태 변경" 버튼 비활성 상태 (PATCH API는 완성, 프론트 미연결) — **주간 게이트(로그인→조회→상태전환→로그확인) UI로는 아직 시연 불가, API 레벨로는 확인됨**
+- [ ] 임계치 설정 API(FR-2.3) 미구현 (백엔드 스코프 아웃, 2주차 F-4/F-5 시점에 필요)
+- [ ] Docker 데몬 꺼져있어 실제 MySQL 기동 미검증 (H2로 시드+API 통합테스트는 통과) — `docker compose up -d` 후 1회 `./gradlew bootRun` 확인 필요
+
+### 남음
 - [ ] 2주차: 시뮬레이터(F-4) + SSE + 알람 + 대시보드(F-5)
 - [ ] 3주차: 점검 이력(F-3) + AI 리포트(F-6)
 - [ ] 4주차: KPI + 테스트 + 배포 + 포트폴리오 README 패키징
@@ -72,14 +85,16 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 ## 5. 다음 작업 지시 (그대로 실행 가능)
 
 ```
-1. backend/ (Spring Boot 3.x, Gradle, Java 17): 패키지 구조
-   com.fabwatch.{auth, equipment, sensor, inspection, alarm, aireport, simulator, common}
-2. frontend/ (Vite + React 18 + TS): 라우팅 8개 화면 골격 (docs/04 §2)
-3. docker-compose.yml (MySQL 8 로컬용)
-4. docs/05 기준 JPA 엔티티 전체 + 시드 (CommandLineRunner)
-5. F-1 인증 구현 (docs/03 F-1 + docs/06 §1)
-참고: 이전 프로젝트 taedibear-studio(../claude/taedibear-studio)와 같은 스택이므로
-      설정(gradle, security config) 재사용 가능.
+1주차 잔여(선택, 짧게): S-2 설비 등록/수정 폼 + S-3 상태변경 버튼을 기존 백엔드 API(POST/PUT /equipments,
+   PATCH /equipments/{id}/status)에 연결 — 주간 게이트 UI 시연 완성용. 급하지 않으면 2주차와 병행 가능.
+
+2주차 본작업:
+1. simulator/: F-4 2초 주기 센서 생성(@Scheduled) + DRIFT/SPIKE/STEP 주입·해제 API (docs/03 F-4)
+2. sensor/: SSE 브로드캐스터(sensor/alarm/status 3종, 30초 heartbeat) + 1분 집계 스케줄러 + 원본 7일 삭제 배치
+3. alarm/: 임계치 판정→알람 생성(중복억제 로직 필수) + CRITICAL→자동DOWN(F-5.6, docs/03 범위한정 주석 준수)
+4. equipment/: 임계치 설정 API(FR-2.3, 1주차 미룬 것) 이번에 구현
+5. frontend features/{sensor,alarm}: S-1 라인현황(실시간카드), S-3 센서탭(실시간+이력차트), 알람센터(S-6)
+참고: docs/11 §10 안전게이트 — CRITICAL→DOWN은 DB 필드 변경만, 실설비 제어 아님을 코드 주석에도 남길 것.
 ```
 
 ## 6. 주의사항 (매 작업 공통)
@@ -94,6 +109,7 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 
 | 날짜 | 작업 | 결과/결정 |
 |---|---|---|
+| 2026-08-07 | **1주차 개발 완료** (하네스 3-agent 병렬: backend-dev/frontend-dev/mes-qa) | git init+docker-compose+.gitignore, 백엔드(F-1 인증+F-2 설비마스터+엔티티15개+시드, 49테스트 통과), 프론트(FSD라이트+로그인+설비목록/상세+레이아웃, build통과), QA에서 실버그 3건 발견·수정(`/lines` 크래시급 shape불일치 포함). 미완료: S-2/S-3 프론트 버튼 미연결(백엔드는 완성), MySQL 실기동 미검증(Docker꺼짐, H2로 대체검증) |
 | 2026-08-07 | 비판적 투자자 관점 리스크 검토 후 docs 5종 수정 | 01(차별점=서사지 moat 아님 명시), 03 F-2(DOWN전환은 DB필드일 뿐 물리제어 아님 명시), 07(실PLC연동 시 안전경고 추가), 08(§0 리스크 섹션·원가추정·A-5 게이트 3항목 추가), 11(§10 실설비제어 안전게이트 신설). 하네스 backend-developer/mes-qa에도 "실제 설비 쓰기 제어 금지" 원칙 반영 |
 | 2026-07-07 | docs/12~15 명세서 4종 신규 작성 | 테스트계획(핵심4종 단위테스트)·배포운영(Railway+Vercel)·용어사전(용어 단일출처)·성능부하(SLO+병목예측). 보안(11)은 기존 유지 |
 | 2026-07-06 | 아키텍처·폴더 구조 확정, docs/10 ADR+면접대비 작성 | 모듈러 모놀리스, 도메인 우선 패키지, FSD 라이트. MSA 미채택 근거 문서화 |
