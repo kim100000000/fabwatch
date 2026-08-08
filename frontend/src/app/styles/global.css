@@ -168,7 +168,8 @@ h4 {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   min-height: 44px;
   padding: 0 12px;
   border: 1px solid var(--border);
@@ -178,8 +179,14 @@ h4 {
   outline: none;
 }
 
+.field textarea {
+  padding: 10px 12px;
+  resize: vertical;
+}
+
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   border-color: var(--accent);
 }
 

@@ -208,6 +208,94 @@
   min-height: 220px;
 }
 
+/* ---------- 등록/수정·상태변경 폼 ---------- */
+.equipment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 640px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.field-readonly {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+}
+
+.field-hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.form-error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--alarm-critical);
+  border-radius: var(--radius);
+  color: var(--alarm-critical);
+  font-size: 13px;
+}
+
+.status-choice {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* 성공 알림 — 인라인 배너 (별도 토스트 시스템 없이 담백하게) */
+.form-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--status-run);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--status-run);
+  font-size: 13px;
+}
+
+.form-notice button {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+/* 액션 컬럼 버튼 — 테이블 행 높이를 키우지 않도록 낮게 */
+.btn-sm {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+/* 상태 이력 테이블은 행 클릭 동작이 없다 */
+.status-log-table tbody tr {
+  cursor: default;
+}
+
+.status-log-table tbody tr:hover {
+  background: transparent;
+}
+
 .placeholder-note {
   display: inline-flex;
   align-items: center;
