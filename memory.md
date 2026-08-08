@@ -69,7 +69,7 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 - [x] 2026-08-07: **1주차 셋업 완료** — git init, docker-compose(MySQL8), .gitignore, .env.example
 - [x] 2026-08-07: **백엔드** Spring Boot 프로젝트 골격 + JPA 엔티티 15개(도메인별 배치, 미구현 도메인은 common/entity에 임시 배치) + 시드(CommandLineRunner) + F-1 인증(JWT 로그인/리프레시/로그아웃, 5회 잠금) + F-2 설비마스터(라인/공정/설비 CRUD, 상태머신 4x4 전이, 상태로그) — `./gradlew build/test` 49개 전부 통과
 - [x] 2026-08-07: **프론트엔드** Vite+React18+TS, FSD라이트(app/pages/features{auth,equipment}/shared), 8개 라우트(S-0~S-8, 실구현은 S-0/S-2/S-3+레이아웃, 나머지 스텁), axios 인터셉터(401→refresh 자동), 디자인 토큰 전량 적용 — `npm run build` 통과
-- [x] 2026-08-07: **QA 1라운드** — 경계면 검증 21항목 통과, 5건 발견·수정(`/lines` 페이지래핑 unwrap 안 하면 헤더 크래시였음, refresh user 필드 미사용, logout 불필요 바디, 목록 DTO modelName/maker 누락, 에러코드 매핑 불일치). 재검증 후 백엔드 49/프론트 build 전부 그린. 리포트: `.claude/_workspace/qa/1주차_인증설비마스터_20260807.md`
+- [x] 2026-08-07: **QA 1라운드** — 경계면 검증 21항목 통과, 5건 발견·수정(`/lines` 페이지래핑 unwrap 안 하면 헤더 크래시였음, refresh user 필드 미사용, logout 불필요 바디, 목록 DTO modelName/maker 누락, 에러코드 매핑 불일치). 재검증 후 백엔드 49/프론트 build 전부 그린. 리포트: `.claude/_workspace/qa/f1-f2-인증설비마스터_20260807.md`
 
 ### 1주차 알려진 미완료 (2주차 착수 전 정리 권장)
 - [ ] S-2 설비 등록/수정 폼 없음 (백엔드 API는 완성, 프론트 미연결)
