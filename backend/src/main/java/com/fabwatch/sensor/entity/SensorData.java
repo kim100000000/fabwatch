@@ -1,4 +1,6 @@
-package com.fabwatch.common.entity;
+package com.fabwatch.sensor.entity;
+
+import com.fabwatch.common.entity.BaseEntity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -13,7 +15,6 @@ import java.time.Instant;
 
 /**
  * 센서 원본 데이터 (docs/05 sensor_data) — 7일 보관 후 배치 삭제. soft delete 대상 아님.
- * TODO: 다음 라운드에 com.fabwatch.sensor.entity 패키지로 이동 예정.
  */
 @Entity
 @Table(name = "sensor_data",

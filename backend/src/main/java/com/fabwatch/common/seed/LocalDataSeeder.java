@@ -1,15 +1,14 @@
 package com.fabwatch.common.seed;
 
+import com.fabwatch.alarm.entity.Alarm;
 import com.fabwatch.auth.entity.Role;
 import com.fabwatch.auth.entity.User;
 import com.fabwatch.auth.repository.UserRepository;
 import com.fabwatch.common.entity.AiReport;
-import com.fabwatch.common.entity.Alarm;
 import com.fabwatch.common.entity.ChecklistItem;
 import com.fabwatch.common.entity.Inspection;
 import com.fabwatch.common.entity.InspectionCheckResult;
 import com.fabwatch.common.entity.PmSchedule;
-import com.fabwatch.common.entity.Sensor;
 import com.fabwatch.common.util.PasswordPolicy;
 import com.fabwatch.common.util.ShiftUtil;
 import com.fabwatch.equipment.entity.Equipment;
@@ -20,6 +19,7 @@ import com.fabwatch.equipment.entity.Process;
 import com.fabwatch.equipment.repository.EquipmentRepository;
 import com.fabwatch.equipment.repository.EquipmentStatusLogRepository;
 import com.fabwatch.equipment.repository.LineRepository;
+import com.fabwatch.sensor.entity.Sensor;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -47,8 +47,10 @@ import java.util.Random;
  *
  * ★ 모든 값은 가상값이다. 실제 LG디스플레이 공정 수치·알람 코드·레시피를 쓰지 않는다 (docs/08 B-3).
  *
- * 시더는 스키마 전체를 채워야 하므로 아직 서비스가 없는 도메인(sensor/inspection/alarm/aireport)
- * 엔티티는 EntityManager로 직접 저장한다 — 해당 도메인 구현 시 각 도메인 서비스로 옮긴다.
+ * 시더는 스키마 전체를 한 번에 채워야 해서 도메인 서비스를 거치지 않고 EntityManager로 직접 저장한다.
+ * common/seed는 이 목적에 한해 도메인 엔티티 직접 참조가 허용되는 유일한 예외 지점이다
+ * (런타임 코드의 도메인 간 통신은 전부 service 인터페이스 또는 스프링 이벤트를 사용한다).
+ * 아직 서비스가 없는 도메인: inspection / aireport.
  */
 @Slf4j
 @Component

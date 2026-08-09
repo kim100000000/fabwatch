@@ -61,6 +61,50 @@
   color: var(--text-primary);
 }
 
+/* ---------- StreamStatusBadge (SSE / 폴링 폴백) ---------- */
+.stream-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-card);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.stream-badge .stream-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+}
+
+.stream-badge[data-mode='SSE'] {
+  border-color: var(--status-run);
+  color: var(--status-run);
+}
+
+.stream-badge[data-mode='SSE'] .stream-dot {
+  background: var(--status-run);
+  animation: stream-pulse 1.6s ease-in-out infinite;
+}
+
+.stream-badge[data-mode='POLLING'] {
+  border-color: var(--alarm-warning);
+  color: var(--alarm-warning);
+}
+
+.stream-badge[data-mode='POLLING'] .stream-dot {
+  background: var(--alarm-warning);
+}
+
+@keyframes stream-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
 /* ---------- EmptyState / ErrorState / Spinner ---------- */
 .empty-state {
   display: flex;

@@ -45,7 +45,7 @@ docs/01_서비스기획서.md            ← 차별점(현장경험→기능 매
 docs/02_요구사항명세서.md          ← FR/NFR 전체 (Must/Should/Could)
 docs/03_기능명세서.md              ← 기능별 규칙·예외 ★개발 시 해당 섹션 투입
 docs/04_화면설계서.md              ← 디자인 토큰(다크 산업용), 화면 8종
-docs/05_DB설계서_ERD.md            ← 테이블 15개, 시드 데이터 정의
+docs/05_DB설계서_ERD.md            ← 테이블 16개(2주차에 sensor_threshold_logs 추가), 시드 데이터 정의
 docs/06_API명세서.md               ← REST + SSE 전체 엔드포인트
 docs/07_개발로드맵.md              ← 4주 계획 + 버퍼 규칙 + 취업 병행 일정
 docs/08_수익화전략.md              ← SaaS/템플릿/콘텐츠 3트랙 (실행은 취업 후)
@@ -71,30 +71,40 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 - [x] 2026-08-07: **프론트엔드** Vite+React18+TS, FSD라이트(app/pages/features{auth,equipment}/shared), 8개 라우트(S-0~S-8, 실구현은 S-0/S-2/S-3+레이아웃, 나머지 스텁), axios 인터셉터(401→refresh 자동), 디자인 토큰 전량 적용 — `npm run build` 통과
 - [x] 2026-08-07: **QA 1라운드** — 경계면 검증 21항목 통과, 5건 발견·수정(`/lines` 페이지래핑 unwrap 안 하면 헤더 크래시였음, refresh user 필드 미사용, logout 불필요 바디, 목록 DTO modelName/maker 누락, 에러코드 매핑 불일치). 재검증 후 백엔드 49/프론트 build 전부 그린. 리포트: `.claude/_workspace/qa/f1-f2-인증설비마스터_20260807.md`
 
-### 1주차 알려진 미완료 (2주차 착수 전 정리 권장)
+### 1주차 알려진 미완료 (2주차에 정리됨)
 - [x] 2026-08-09: S-2 설비 등록/수정 폼 연결 완료 (EquipmentFormDialog, ADMIN 전용, code/status는 읽기전용)
 - [x] 2026-08-09: S-3 "상태 변경" 버튼 연결 완료 (EquipmentStatusDialog, ADMIN·ENGINEER, 허용 전이만 후보 노출) + 상태 이력 탭 실구현(GET status-logs 소비) — **주간 게이트 UI로 완주 가능해짐**
-- [ ] 임계치 설정 API(FR-2.3) 미구현 (백엔드 스코프 아웃, 2주차 F-4/F-5 시점에 필요)
-- [ ] Docker 데몬 꺼져있어 실제 MySQL 기동 미검증 (H2로 시드+API 통합테스트는 통과) — `docker compose up -d` 후 1회 `./gradlew bootRun` 확인 필요, S-2 등록 409/S-3 전이거부 400 UX도 서버 기동 후 1회 수동 확인 권장
+- [x] 2026-08-10: 임계치 설정 API(FR-2.3) 백엔드 구현 완료 — 프론트 편집 화면은 아래 "2주차 알려진 미완료" 참고
+
+### 2주차 완료 — 2026-08-10
+- [x] **백엔드**: simulator(SensorDataSource 인터페이스+구현체, DRIFT/SPIKE/STEP), sensor(SSE브로드캐스터 3종+30초heartbeat, 1분집계, 7일삭제, 임계치API), alarm(임계치판정→중복억제→알람생성, CRITICAL자동DOWN은 이벤트로만) — 엔티티 common/entity에서 각 도메인으로 이동 완료. 도메인간 참조는 서비스 인터페이스/이벤트뿐(grep 재검증, 0건 위반). `gradlew test` 114개 전부 통과(1주차 49→114)
+- [x] **프론트**: SSE훅(+3초폴링폴백), S-1 라인현황 대시보드, S-3 센서탭(실시간+이력차트, Recharts), S-6 알람센터(ACK/RESOLVE/수동보고). Playwright로 SSE/폴백/게이팅 실측 검증까지 완료(목서버 기준). `npm run build`/lint 통과
+- [x] **QA 3라운드**: 신규 에러코드4종 매핑 확인(2개 추가, 2개는 의도적 미매핑+주석), 도메인경계 재검증(0건), 프론트 optional필드 크래시위험 없음 확인, 중복억제/자동DOWN 로직 재대조, 실결함 3건 발견·수정("0" 오도표시, 허위 보안주석 등). 리포트: `.claude/_workspace/qa/f4-f5-시뮬레이터센서알람_20260810.md`
+- [x] **문서 동기화**: docs/05(sensor_threshold_logs 테이블 신설 반영, 16개 테이블), docs/06(SSE payload 실제 shape, 엔드포인트 2개 추가, sensor-data 응답이 PageResponse 아님을 반영)
+
+### 2주차 알려진 미완료
+- [ ] 임계치 편집 화면(프론트) 없음 — API는 완성, UI는 3주차 이후로 이월 (데모 핵심 플로우엔 없어도 지장 없음)
+- [ ] S-1 KPI 스트립이 문서 스펙(누적 가동률)이 아니라 현재 상태 스냅샷으로 구현됨 — 누적 KPI는 4주차 FR-5.7과 함께 처리
+- [ ] Docker 데몬 꺼져있어 실제 MySQL 기동 + 3분 시연(드리프트→차트→알람→자동DOWN) 미검증 (H2+목서버로 대체검증만 함) — **다음 세션에 `docker compose up -d` 후 1회 실서버 시연 강력 권장**, 2주 연속 미룬 항목이라 3주차 착수 전 반드시 확인
 
 ### 남음
-- [ ] 2주차: 시뮬레이터(F-4) + SSE + 알람 + 대시보드(F-5)
 - [ ] 3주차: 점검 이력(F-3) + AI 리포트(F-6)
 - [ ] 4주차: KPI + 테스트 + 배포 + 포트폴리오 README 패키징
 
 ## 5. 다음 작업 지시 (그대로 실행 가능)
 
 ```
-1주차 잔여(선택, 짧게): S-2 설비 등록/수정 폼 + S-3 상태변경 버튼을 기존 백엔드 API(POST/PUT /equipments,
-   PATCH /equipments/{id}/status)에 연결 — 주간 게이트 UI 시연 완성용. 급하지 않으면 2주차와 병행 가능.
+착수 전 필수(2주 연속 미룸): docker compose up -d → ./gradlew bootRun 1회 기동해서
+   실MySQL 기준으로 로그인→드리프트주입→차트상승→알람→자동DOWN 3분 시연 수동 확인.
+   H2 기준으로는 이미 다 통과했지만 실서버로는 아직 한 번도 안 돌려봄 — 리스크 누적 중.
 
-2주차 본작업:
-1. simulator/: F-4 2초 주기 센서 생성(@Scheduled) + DRIFT/SPIKE/STEP 주입·해제 API (docs/03 F-4)
-2. sensor/: SSE 브로드캐스터(sensor/alarm/status 3종, 30초 heartbeat) + 1분 집계 스케줄러 + 원본 7일 삭제 배치
-3. alarm/: 임계치 판정→알람 생성(중복억제 로직 필수) + CRITICAL→자동DOWN(F-5.6, docs/03 범위한정 주석 준수)
-4. equipment/: 임계치 설정 API(FR-2.3, 1주차 미룬 것) 이번에 구현
-5. frontend features/{sensor,alarm}: S-1 라인현황(실시간카드), S-3 센서탭(실시간+이력차트), 알람센터(S-6)
-참고: docs/11 §10 안전게이트 — CRITICAL→DOWN은 DB 필드 변경만, 실설비 제어 아님을 코드 주석에도 남길 것.
+3주차 본작업 (F-3 점검이력 + F-6 AI리포트):
+1. inspection/: 점검 이력 등록(PM체크리스트/BM 4M분류), PM스케줄(주기설정→next_due_at계산,
+   OVERDUE 경고, 3일초과 MAJOR알람 — alarm 도메인과는 이벤트로 연결), 검색/필터+페이징 (docs/03 F-3)
+2. aireport/: 컨텍스트 수집(알람+센서1분집계요약+이력5건+BM3건) → Claude API 호출(백엔드 경유만,
+   docs/11 §7) → DRAFT 저장(비동기 202) → 편집→확정 플로우, 일20건 쿼터+토큰기록 (docs/03 F-6, docs/06 §7)
+3. frontend features/{inspection,aireport}: S-5 점검등록폼(PM/BM분기), S-4 이력목록, S-7 리포트뷰/에디터
+참고: FR-2.3 임계치 편집 화면(2주차 이월분)도 여유 있으면 이번에 같이 붙이기 — API는 이미 완성돼있음.
 ```
 
 ## 6. 주의사항 (매 작업 공통)
@@ -109,6 +119,7 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 
 | 날짜 | 작업 | 결과/결정 |
 |---|---|---|
+| 2026-08-10 | **2주차 완료** (하네스 3-agent: backend-dev/frontend-dev/mes-qa) | 시뮬레이터(F-4)+SSE(sensor/alarm/status 3종)+알람(임계치판정+중복억제+CRITICAL자동DOWN)+임계치API(FR-2.3 이월분) 백엔드, 대시보드(S-1)+센서탭(S-3)+알람센터(S-6) 프론트(Playwright 실측검증 포함). QA에서 실결함 3건 발견·수정(에러코드 미매핑으로 DB컬럼명 노출, 미해결알람 0으로 오도표시, 존재안하는 클래스 언급하는 허위 보안주석). QA가 이번엔 "리포트 먼저 저장" 순서를 지켜서 중단 리스크 없이 완료. docs/05·06 드리프트 3건 리더가 직접 동기화. 미완료: 임계치 편집화면(UI), 실MySQL 3분시연(2주 연속 미룸 — 3주차 착수 전 필수) |
 | 2026-08-09 | S-2/S-3 프론트 연결 (1주차 잔여 마무리) + QA 2라운드 | 설비 등록/수정 폼, 상태변경 다이얼로그(허용전이만 후보), 상태이력 탭 구현. QA 서브에이전트가 검증 도중 워치독 타임아웃으로 중단돼, 리더가 직접 핵심 위험 4項(전이표/에러코드/응답shape/권한매트릭스) 재대조 — 전부 일치, 결함 없음. 리포트: `.claude/_workspace/qa/f2-설비상태변경UI연결_20260809.md`. GitHub `kim100000000/fabwatch`(public) 생성, develop을 기본 브랜치로 전환 |
 | 2026-08-07 | **1주차 개발 완료** (하네스 3-agent 병렬: backend-dev/frontend-dev/mes-qa) | git init+docker-compose+.gitignore, 백엔드(F-1 인증+F-2 설비마스터+엔티티15개+시드, 49테스트 통과), 프론트(FSD라이트+로그인+설비목록/상세+레이아웃, build통과), QA에서 실버그 3건 발견·수정(`/lines` 크래시급 shape불일치 포함). 미완료: S-2/S-3 프론트 버튼 미연결(백엔드는 완성), MySQL 실기동 미검증(Docker꺼짐, H2로 대체검증) |
 | 2026-08-07 | 비판적 투자자 관점 리스크 검토 후 docs 5종 수정 | 01(차별점=서사지 moat 아님 명시), 03 F-2(DOWN전환은 DB필드일 뿐 물리제어 아님 명시), 07(실PLC연동 시 안전경고 추가), 08(§0 리스크 섹션·원가추정·A-5 게이트 3항목 추가), 11(§10 실설비제어 안전게이트 신설). 하네스 backend-developer/mes-qa에도 "실제 설비 쓰기 제어 금지" 원칙 반영 |

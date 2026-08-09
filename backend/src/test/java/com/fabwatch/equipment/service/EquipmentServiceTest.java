@@ -24,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
@@ -55,6 +56,9 @@ class EquipmentServiceTest {
     private EquipmentStatusLogRepository statusLogRepository;
     @Mock
     private UserQueryService userQueryService;
+    /** 상태 변경 시 EquipmentStatusChangedEvent를 발행한다 (SSE `status` 이벤트의 출처) */
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private EquipmentService equipmentService;

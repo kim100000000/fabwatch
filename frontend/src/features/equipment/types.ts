@@ -29,6 +29,12 @@ export interface EquipmentSummary {
   managerName?: string | null
   /** 미해결(OPEN/ACK) 알람 수 */
   openAlarmCount?: number
+  /**
+   * PM 예정일 초과 여부 (docs/04 §3 S-1 카드 "PM지연 배지").
+   * 백엔드가 목록 응답에 이 필드를 넣어 주면 대시보드 카드에 배지가 뜬다 — 없으면 배지 미표시.
+   * ★ backend-developer 확인 필요: 목록 DTO 에 포함할지 / GET /pm-schedules?overdueOnly=true 로 별도 조회할지
+   */
+  pmOverdue?: boolean
 }
 
 /** GET /equipments/{id} 응답에 포함되는 센서 정보 */

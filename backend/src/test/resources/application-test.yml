@@ -18,6 +18,9 @@ fabwatch:
     allowed-origins: http://localhost:5173
   seed:
     enabled: false
+  scheduler:
+    # 시간 기반 로직(2초 수집·1분 집계·30초 heartbeat)은 스케줄러를 끄고 서비스 메서드를 직접 호출해 검증한다
+    enabled: false
 
 logging:
   level:

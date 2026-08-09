@@ -1,0 +1,286 @@
+/* 센서 도메인 전용 스타일 — 색상은 전역 토큰만 사용 (docs/04 §1) */
+
+/* ---------- 실시간 차트 (2×2 그리드) ---------- */
+.sensor-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 1024px) {
+  .sensor-chart-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sensor-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+
+.sensor-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sensor-chart-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sensor-chart-title .sensor-type {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* 현재값 — 수치는 mono (docs/04 §1) */
+.sensor-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.sensor-value[data-level='WARNING'] { color: var(--alarm-warning); }
+.sensor-value[data-level='CRITICAL'] { color: var(--alarm-critical); }
+
+.sensor-value .sensor-unit {
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.sensor-threshold-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.sensor-threshold-legend .warn { color: var(--alarm-warning); }
+.sensor-threshold-legend .crit { color: var(--alarm-critical); }
+
+.sensor-chart-body {
+  width: 100%;
+  height: 180px;
+}
+
+.sensor-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 180px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* Recharts 툴팁 — 다크 카드 톤 유지 */
+.sensor-tooltip {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  font-size: 12px;
+}
+
+.sensor-tooltip .tooltip-time {
+  display: block;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.sensor-tooltip .tooltip-value {
+  display: block;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* ---------- 이력 차트 ---------- */
+.sensor-history {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+
+.sensor-history-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sensor-history-head .spacer {
+  margin-left: auto;
+}
+
+.granularity-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.granularity-badge[data-granularity='1M'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sensor-history-body {
+  width: 100%;
+  height: 260px;
+}
+
+/* ---------- S-1 설비 실시간 카드 ---------- */
+.live-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--status-idle); /* 상태 좌측 보더 4px (docs/04 §3) */
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  text-align: left;
+  color: inherit;
+  width: 100%;
+}
+
+.live-card:hover {
+  background: var(--bg-hover);
+}
+
+.live-card[data-status='RUN'] { border-left-color: var(--status-run); }
+.live-card[data-status='IDLE'] { border-left-color: var(--status-idle); }
+.live-card[data-status='DOWN'] { border-left-color: var(--status-down); }
+.live-card[data-status='PM'] { border-left-color: var(--status-pm); }
+
+.live-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.live-card-code {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.live-card-name {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.live-sensor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+}
+
+.live-sensor {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.live-sensor .label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.live-sensor .value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.live-sensor[data-level='WARNING'] .value { color: var(--alarm-warning); }
+.live-sensor[data-level='CRITICAL'] .value { color: var(--alarm-critical); }
+
+/* 임계치 초과 시 1회 깜빡임 (docs/04 §3) */
+.live-sensor[data-level='WARNING'] .value[data-flash='true'],
+.live-sensor[data-level='CRITICAL'] .value[data-flash='true'] {
+  animation: sensor-flash 0.6s ease-out 1;
+}
+
+@keyframes sensor-flash {
+  0% { opacity: 0.25; }
+  100% { opacity: 1; }
+}
+
+.live-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.live-alarm-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--alarm-major);
+}
+
+.live-alarm-count[data-zero='true'] {
+  color: var(--text-secondary);
+}
+
+.pm-overdue-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border: 1px solid var(--status-down);
+  border-radius: 4px;
+  color: var(--status-down);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.live-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 1024px) {
+  .live-grid {
+    grid-template-columns: 1fr;
+  }
+}

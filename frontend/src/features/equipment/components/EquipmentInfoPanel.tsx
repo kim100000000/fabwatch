@@ -8,7 +8,11 @@ interface EquipmentInfoPanelProps {
 
 /** S-3 상단 설비 기본정보 — 시각은 전부 KST 변환 후 표시 */
 export function EquipmentInfoPanel({ equipment }: EquipmentInfoPanelProps) {
-  const sensorCount = equipment.sensors?.length ?? 0
+  // 백엔드 EquipmentDetailResponse 는 아직 sensors/openAlarmCount/pmSchedule 을 내려주지 않는다.
+  // 이때 0 으로 폴백하면 "미해결 알람 0건" 옆에 알람 탭이 실제 알람을 띄우는 모순이 생기므로,
+  // "미제공(-)"과 "실제 0"을 구분해 표시한다. 필드가 추가되면 자동으로 숫자가 나온다.
+  const sensorCount = equipment.sensors?.length
+  const openAlarmCount = equipment.openAlarmCount
   const nextDueAt = equipment.pmSchedule?.nextDueAt
 
   return (
@@ -31,11 +35,11 @@ export function EquipmentInfoPanel({ equipment }: EquipmentInfoPanelProps) {
       </div>
       <div>
         <dt>센서</dt>
-        <dd>{sensorCount}개</dd>
+        <dd>{sensorCount === undefined ? '-' : `${sensorCount}개`}</dd>
       </div>
       <div>
         <dt>미해결 알람</dt>
-        <dd>{equipment.openAlarmCount ?? 0}건</dd>
+        <dd>{openAlarmCount === undefined ? '-' : `${openAlarmCount}건`}</dd>
       </div>
       <div>
         <dt>다음 PM 예정</dt>

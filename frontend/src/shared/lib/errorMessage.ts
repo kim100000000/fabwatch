@@ -19,6 +19,18 @@ const ERROR_MESSAGE: Record<string, string> = {
   // INVALID_STATUS_TRANSITION 은 서버 message 에 허용 전이 목록("허용: [IDLE, DOWN, PM]")이 담겨 있어
   // 일부러 매핑하지 않는다 — NOT_FOUND/VALIDATION_ERROR 와 동일하게 서버 message 폴백이 더 유용하다.
   DUPLICATE_EQUIPMENT_CODE: '이미 존재하는 설비 코드입니다. 다른 코드를 입력해 주세요.',
+  // 센서 임계치 (docs/06 §2 PUT thresholds)
+  // 서버 message 는 "임계치 순서 위반(crit_low ≤ warn_low): 85 > 90" 처럼 DB 컬럼명이 섞여 있어
+  // 폴백시키면 사용자 화면에 snake_case 가 노출된다 — 반드시 매핑한다.
+  INVALID_THRESHOLD_RANGE:
+    '임계치 순서가 올바르지 않습니다. 위험 하한 ≤ 경고 하한 < 경고 상한 ≤ 위험 상한 이 되도록 입력해 주세요.',
+  // 알람 (docs/06 §6)
+  // ACK_REQUIRED_FIRST / INVALID_ALARM_STATUS 는 서버 message 에 "현재 상태: OPEN" 처럼 실제 상태가
+  // 담겨 있어 일부러 매핑하지 않는다 — NOT_FOUND/VALIDATION_ERROR/INVALID_STATUS_TRANSITION 과 동일 원칙.
+  // (의도적 미매핑임을 명시해 둔다. 매핑을 추가하면 상태 정보가 사라져 오히려 불친절해진다.)
+  // 시뮬레이터 (docs/06 §8)
+  SCENARIO_ALREADY_ACTIVE:
+    '해당 센서에 같은 유형의 시나리오가 이미 실행 중입니다. 기존 시나리오를 해제한 뒤 다시 주입해 주세요.',
   // 클라이언트 측
   [CLIENT_ERROR_CODE.NETWORK_ERROR]: '서버에 연결할 수 없습니다. 네트워크 상태를 확인해 주세요.',
   [CLIENT_ERROR_CODE.UNKNOWN]: '알 수 없는 오류가 발생했습니다.',

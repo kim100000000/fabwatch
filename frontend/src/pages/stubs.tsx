@@ -5,17 +5,6 @@ import { StubPage } from './StubPage'
  * 각 화면 구현 시 이 파일에서 꺼내 전용 페이지 파일로 승격한다.
  */
 
-/** S-1 라인 현황 대시보드 (/) */
-export function DashboardPage() {
-  return (
-    <StubPage
-      screen="S-1"
-      title="라인 현황 대시보드"
-      plan="2주차: KPI 스트립(가동률/금일 알람/PM지연/DOWN 수) + 설비 카드 그리드(SSE 2초 갱신) + 실시간 알람 스트림"
-    />
-  )
-}
-
 /** S-4 점검 이력 목록/검색 (/inspections) */
 export function InspectionListPage() {
   return (
@@ -34,17 +23,6 @@ export function InspectionCreatePage() {
       screen="S-5"
       title="점검 이력 등록"
       plan="3주차: PM/BM 토글 분기 폼 — PM은 체크리스트 OK/NG/NA, BM은 4M 분류 + 연계 알람. 소요시간 자동 계산, 교대조 자동 판정"
-    />
-  )
-}
-
-/** S-6 알람 센터 (/alarms) */
-export function AlarmCenterPage() {
-  return (
-    <StubPage
-      screen="S-6"
-      title="알람 센터"
-      plan="2주차: 알람 목록(OPEN 우선 정렬) + ACK/RESOLVE 처리 + SSE 신규 알람 수신"
     />
   )
 }

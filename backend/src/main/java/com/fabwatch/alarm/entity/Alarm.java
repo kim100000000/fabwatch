@@ -1,5 +1,9 @@
-package com.fabwatch.common.entity;
+package com.fabwatch.alarm.entity;
 
+import com.fabwatch.common.entity.SoftDeletableEntity;
+
+import com.fabwatch.common.exception.BusinessException;
+import com.fabwatch.common.exception.ErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -18,7 +22,6 @@ import java.time.Instant;
 
 /**
  * 알람 (docs/05 alarms, docs/03 F-5.3).
- * TODO: 다음 라운드에 com.fabwatch.alarm.entity 패키지로 이동 예정.
  */
 @Entity
 @Table(name = "alarms", indexes = {
@@ -90,6 +93,34 @@ public class Alarm extends SoftDeletableEntity {
 
     @Column(name = "resolve_note", length = 300)
     private String resolveNote;
+
+    /**
+     * 알람 상태 전이 (docs/03 F-5.3): OPEN → ACK → RESOLVED.
+     * ACK 없이 RESOLVED 불가, RESOLVED 시 해제 사유 필수 — 전이 판정은 이 두 메서드에만 존재한다.
+     */
+    public void acknowledge(Long userId, Instant at) {
+        if (status != Status.OPEN) {
+            throw new BusinessException(ErrorCode.INVALID_ALARM_STATUS,
+                    "OPEN 상태의 알람만 확인 처리할 수 있습니다. 현재 상태: " + status);
+        }
+        this.status = Status.ACK;
+        this.ackBy = userId;
+        this.ackAt = at;
+    }
+
+    public void resolve(Long userId, String note, Instant at) {
+        if (status != Status.ACK) {
+            throw new BusinessException(ErrorCode.ACK_REQUIRED_FIRST,
+                    "확인(ACK) 처리 후에만 해제할 수 있습니다. 현재 상태: " + status);
+        }
+        if (note == null || note.isBlank()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "해제 사유(resolveNote)는 필수입니다.");
+        }
+        this.status = Status.RESOLVED;
+        this.resolvedBy = userId;
+        this.resolveNote = note;
+        this.resolvedAt = at;
+    }
 
     @Builder
     private Alarm(Long equipmentId, Long sensorId, Type alarmType, Severity severity, Status status,

@@ -76,6 +76,18 @@ inspections ─── alarms (BM-알람 연계, nullable)
 | measured_at | DATETIME(3) NN | |
 | INDEX (sensor_id, measured_at) | | 조회 핵심 인덱스 |
 
+### sensor_threshold_logs (임계치 변경 이력 — 구현 시 신설, 2026-08-10 문서 반영)
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| sensor_id | FK NN | |
+| old_warn_low/high, old_crit_low/high | DECIMAL(10,2) NULL | 변경 전 값 |
+| new_warn_low/high, new_crit_low/high | DECIMAL(10,2) NULL | 변경 후 값 |
+| reason | VARCHAR(200) NN | 임계치 임의 변경은 사고의 씨앗이라 필수 (F-2 원칙) |
+| changed_by | FK users NN | |
+| changed_at | DATETIME NN | |
+
+> 원래 설계(§4 시드 데이터 절)엔 "변경 시 이력 남김"이라고만 돼 있고 전용 테이블이 없었다. 구현 단계에서 저장할 자리가 필요해 추가.
+
 ### sensor_data_1m (1분 집계 — 영구 보관)
 | 컬럼 | 타입 | 설명 |
 |---|---|---|

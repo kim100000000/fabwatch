@@ -30,6 +30,22 @@ export interface ApiErrorBody {
   timestamp: string
 }
 
+/**
+ * 목록 응답에서 배열을 꺼낸다.
+ * 백엔드는 목록을 `{ content, ... }` 로 감싸는 것이 계약(docs/06 목록 공통)이지만,
+ * 2주차 시점에 sensor/alarm 엔드포인트는 백엔드 병렬 구현 중이라 래핑 여부가 확정되지 않았다.
+ * 계약 위반을 조용히 삼키지 않도록 배열이 그대로 오면 console.warn 으로 드러낸다(QA 대조용).
+ */
+export function unwrapList<T>(data: PageResponse<T> | T[] | null | undefined, endpoint: string): T[] {
+  if (Array.isArray(data)) {
+    console.warn(
+      `[API] ${endpoint} 응답이 목록 공통 래핑({content,...})이 아니라 배열입니다 — 백엔드 계약 확인 필요`,
+    )
+    return data
+  }
+  return data?.content ?? []
+}
+
 /** 목록 조회 공통 쿼리 파라미터 */
 export interface PageParams {
   page?: number

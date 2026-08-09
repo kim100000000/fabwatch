@@ -17,6 +17,11 @@ spring:
     serialization:
       write-dates-as-timestamps: false   # 응답 시각은 ISO-8601 UTC 문자열
     time-zone: UTC
+  task:
+    scheduling:
+      pool:
+        # 2초 수집 / 1분 집계 / 30초 heartbeat / 새벽 배치가 서로 밀리지 않도록 (docs/13 §5)
+        size: 4
   data:
     web:
       pageable:
@@ -46,6 +51,9 @@ fabwatch:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   seed:
     enabled: false
+  scheduler:
+    # @Scheduled 전체 on/off (docs/13 §5). 테스트에서는 false로 꺼서 시간 기반 로직을 격리한다.
+    enabled: ${SCHEDULER_ENABLED:true}
 
 logging:
   level:

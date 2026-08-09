@@ -26,15 +26,22 @@
 | PATCH | /equipments/{id}/status | `{toStatus, reason}` 상태 전환. 400 `INVALID_STATUS_TRANSITION` | ENGINEER+ |
 | GET | /equipments/{id}/status-logs | 상태 변경 이력 | 전체 |
 | GET | /equipments/{id}/kpi | `?period=DAY|WEEK|MONTH` → `{mtbfHours, mttrMin, availability, downCount}` | 전체 |
-| PUT | /equipments/{id}/sensors/{sensorId}/thresholds | 임계치 수정 `{warnLow..critHigh, reason}` | ADMIN |
+
+> 임계치 수정 API(`PUT .../sensors/{sensorId}/thresholds`)는 §3 센서 데이터로 이동(센서 소유 리소스라 sensor 도메인에 구현).
+> `GET /equipments/{id}` 상세는 2주차 기준 기본정보만 반환 — 센서/PM스케줄/미해결알람수 통합은 아직 미완료(memory.md 참고).
 
 ## 3. 센서 데이터 /sensors
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
-| GET | /equipments/{id}/sensor-data/latest | 센서별 최신값 1건씩 (카드용) |
-| GET | /equipments/{id}/sensor-data | `?sensorType=&from=&to=` — 1시간 이내: 원본, 초과: 1분 집계 자동 선택. 응답에 `granularity: "RAW"|"1M"` 명시 |
-| **SSE** | **GET /stream/sensors?equipmentId=** | `text/event-stream`. event: `sensor` `{sensorId, type, value, measuredAt, level: NORMAL|WARNING|CRITICAL}` / event: `alarm` (신규 알람) / event: `status` (설비 상태 변경). equipmentId 생략 시 전체 라인 구독 (메인 대시보드용). 30초 heartbeat |
+| GET | /equipments/{id}/sensor-data/latest | 센서별 최신값 1건씩(카드용). `PageResponse` 래핑, 항목에 `warnLow/warnHigh/critLow/critHigh` 4값 동봉(기준선용) |
+| GET | /equipments/{id}/sensor-data | `?sensorType=&from=&to=` — 1시간 이내: 원본, 초과: 1분 집계 자동 선택. **`PageResponse`가 아니라 단일 객체**: `{equipmentId, granularity:"RAW"|"1M", from, to, series:[{sensorId, sensorType, unit, warnLow~critHigh, points:[{at, value, minValue, maxValue, sampleCount}]}]}`. point shape은 RAW/1M 공통(1M일 때 `at=bucket_at, value=avg_v`, min/max/sampleCount 채워짐) |
+| GET | /equipments/{id}/sensors | 설비 센서 목록(임계치 편집 화면 진입용). *(구현 시 추가, 최초 설계엔 없었음)* |
+| PUT | /equipments/{id}/sensors/{sensorId}/thresholds | 임계치 수정 `{warnLow,warnHigh,critLow,critHigh,reason}`(reason 필수) → 400 `INVALID_THRESHOLD_RANGE`. ADMIN 전용(ENGINEER 403) |
+| GET | /equipments/{id}/sensors/{sensorId}/thresholds/logs | 임계치 변경 이력 `{oldWarn*,oldCrit*,newWarn*,newCrit*,reason,changedBy,changedByName,changedAt}`. *(구현 시 추가)* |
+| **SSE** | **GET /stream/sensors?token=&equipmentId=** | `text/event-stream`. 인증은 쿼리파라미터 `token`(SSE 한정, docs/11 §4). event: `sensor` `{sensorId, equipmentId, type, unit, value, measuredAt, level: NORMAL|WARNING|CRITICAL}`(`equipmentId`·`unit`은 카드 매칭/차트축용으로 추가) / event: `alarm` — REST `AlarmResponse`와 다른 shape, **식별자 키가 `id`가 아니라 `alarmId`**, ack/resolve 필드 없음 / event: `status` `{equipmentId, equipmentCode, fromStatus, toStatus, reason, changedBy, changedAt}`. equipmentId 생략 시 전체 라인 구독(메인 대시보드용). 30초 heartbeat(`:heartbeat` 주석) |
+
+> 임계치 API는 설비가 아니라 센서 소유이므로 실제 구현은 `sensor` 도메인 패키지에 위치(equipment가 Sensor 엔티티를 직접 참조하지 않기 위함). 경로·권한은 위 표와 동일.
 
 ## 4. 점검 이력 /inspections
 

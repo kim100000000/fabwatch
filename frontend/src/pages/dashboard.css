@@ -1,0 +1,36 @@
+/* S-1 라인 현황 대시보드 전용 레이아웃 — 색상은 전역 토큰만 사용 */
+
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.kpi-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+
+.kpi-item[data-status='RUN'] { border-top-color: var(--status-run); }
+.kpi-item[data-status='IDLE'] { border-top-color: var(--status-idle); }
+.kpi-item[data-status='DOWN'] { border-top-color: var(--status-down); }
+.kpi-item[data-status='PM'] { border-top-color: var(--status-pm); }
+.kpi-item[data-alarm='true'] { border-top-color: var(--alarm-critical); }
+
+.kpi-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+}
+
+.kpi-value {
+  font-size: 24px;
+  font-weight: 700;
+}

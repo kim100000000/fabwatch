@@ -30,6 +30,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     public static final String EXPIRED_ATTRIBUTE = "fabwatch.token.expired";
     private static final String BEARER_PREFIX = "Bearer ";
+    /** 쿼리 파라미터 토큰을 허용하는 유일한 경로 (docs/11 §4 — SSE 엔드포인트 한정) */
+    private static final String SSE_PATH_PREFIX = "/api/v1/stream/";
 
     private final JwtTokenProvider tokenProvider;
 
@@ -54,11 +56,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 
+    /**
+     * 기본은 Authorization 헤더. 단 SSE 엔드포인트(/api/v1/stream/**)에 한해 쿼리 파라미터 token을 허용한다
+     * — EventSource가 커스텀 헤더를 붙일 수 없기 때문 (docs/11 §4).
+     *
+     * 완화책: ① 이 경로에서만 허용 ② 연결 시 1회 검증 ③ Access 토큰 30분 만료로 노출 창 제한
+     * ④ 로그에는 request.getRequestURI()(쿼리스트링 미포함)만 남겨 token이 로그로 새지 않게 한다.
+     */
     private String resolveToken(HttpServletRequest request) {
         String header = request.getHeader("Authorization");
         if (header != null && header.startsWith(BEARER_PREFIX)) {
             String value = header.substring(BEARER_PREFIX.length()).trim();
             return value.isEmpty() ? null : value;
+        }
+        if (request.getRequestURI().startsWith(SSE_PATH_PREFIX)) {
+            String value = request.getParameter("token");
+            return value == null || value.isBlank() ? null : value.trim();
         }
         return null;
     }

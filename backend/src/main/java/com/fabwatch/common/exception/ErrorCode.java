@@ -26,7 +26,17 @@ public enum ErrorCode {
 
     // 설비 (docs/03 F-2, docs/06 §2)
     INVALID_STATUS_TRANSITION(HttpStatus.BAD_REQUEST, "허용되지 않는 설비 상태 전환입니다."),
-    DUPLICATE_EQUIPMENT_CODE(HttpStatus.CONFLICT, "이미 존재하는 설비 코드입니다.");
+    DUPLICATE_EQUIPMENT_CODE(HttpStatus.CONFLICT, "이미 존재하는 설비 코드입니다."),
+
+    // 센서 임계치 (docs/03 F-2 "임계치 설정", docs/06 §2 PUT thresholds)
+    INVALID_THRESHOLD_RANGE(HttpStatus.BAD_REQUEST, "임계치 순서가 올바르지 않습니다. crit_low ≤ warn_low < warn_high ≤ crit_high 이어야 합니다."),
+
+    // 알람 (docs/03 F-5.3, docs/06 §6)
+    ACK_REQUIRED_FIRST(HttpStatus.BAD_REQUEST, "확인(ACK) 처리 후에만 해제할 수 있습니다."),
+    INVALID_ALARM_STATUS(HttpStatus.BAD_REQUEST, "현재 알람 상태에서는 수행할 수 없는 처리입니다."),
+
+    // 시뮬레이터 (docs/03 F-4.2, docs/06 §8)
+    SCENARIO_ALREADY_ACTIVE(HttpStatus.CONFLICT, "해당 센서에 동일 유형의 활성 시나리오가 이미 있습니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;

@@ -1,0 +1,79 @@
+/* 데모 컨트롤 패널 (S-1 우하단 플로팅) — 색상은 전역 토큰만 사용 */
+
+.demo-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 40;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.demo-fab:hover {
+  background: var(--bg-hover);
+}
+
+.demo-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 40;
+  width: 320px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+
+.demo-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.demo-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  overflow-y: auto;
+}
+
+.demo-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.demo-scenario-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.demo-scenario {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+@media (max-width: 1024px) {
+  .demo-panel {
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+}

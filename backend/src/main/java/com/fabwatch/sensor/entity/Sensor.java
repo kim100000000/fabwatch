@@ -1,4 +1,6 @@
-package com.fabwatch.common.entity;
+package com.fabwatch.sensor.entity;
+
+import com.fabwatch.common.entity.SoftDeletableEntity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -17,7 +19,6 @@ import java.math.BigDecimal;
 
 /**
  * 센서 (docs/05 sensors).
- * TODO: 다음 라운드에 com.fabwatch.sensor.entity 패키지로 이동 예정 (현재는 스키마 확정 목적의 임시 위치).
  *
  * equipment_id는 equipment 도메인 FK지만 도메인 간 직접 참조 금지 원칙에 따라 ID만 보관한다.
  */
@@ -65,6 +66,17 @@ public class Sensor extends SoftDeletableEntity {
 
     @Column(name = "crit_high", precision = 10, scale = 2)
     private BigDecimal critHigh;
+
+    /**
+     * 임계치 변경 (docs/03 F-2, FR-2.3). 순서 검증은 ThresholdRangeValidator, 이력 기록은 서비스 책임.
+     * base_value/noise_sigma(시뮬레이터 기준값)는 여기서 건드리지 않는다.
+     */
+    public void updateThresholds(BigDecimal warnLow, BigDecimal warnHigh, BigDecimal critLow, BigDecimal critHigh) {
+        this.warnLow = warnLow;
+        this.warnHigh = warnHigh;
+        this.critLow = critLow;
+        this.critHigh = critHigh;
+    }
 
     @Builder
     private Sensor(Long equipmentId, Type type, String unit, BigDecimal baseValue, BigDecimal noiseSigma,

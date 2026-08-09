@@ -93,6 +93,7 @@ export function EquipmentDetailPage() {
           <EquipmentInfoPanel equipment={equipment} />
           <EquipmentDetailTabs
             equipmentId={equipment.id}
+            sensors={equipment.sensors}
             statusLogReloadKey={statusLogReloadKey}
           />
 

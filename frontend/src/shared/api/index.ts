@@ -1,5 +1,7 @@
 export { apiClient, API_BASE_URL, onUnauthorized, toApiError, clearSession, restoreSession } from './client'
 export type { RefreshResponse, RefreshResult } from './client'
 export { tokenStorage } from './tokenStorage'
-export { ApiError, CLIENT_ERROR_CODE } from './types'
+export { ApiError, CLIENT_ERROR_CODE, unwrapList } from './types'
 export type { ApiErrorBody, AuthUserSummary, PageResponse, PageParams } from './types'
+export { useSse } from './sse'
+export type { SseMode, SseState, SseEventHandler, UseSseOptions } from './sse'

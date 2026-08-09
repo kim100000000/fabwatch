@@ -1,4 +1,6 @@
-package com.fabwatch.common.entity;
+package com.fabwatch.simulator.entity;
+
+import com.fabwatch.common.entity.SoftDeletableEntity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -18,7 +20,6 @@ import java.time.Instant;
  * 시뮬레이터 시나리오 (docs/05 simulation_scenarios, docs/03 F-4.2).
  * param은 JSON 문자열(slope/probability/offset 등) — MySQL JSON 대신 TEXT로 저장해
  * H2(테스트)와 MySQL(운영) 양쪽에서 동일하게 동작하도록 한다.
- * TODO: 다음 라운드에 com.fabwatch.simulator.entity 패키지로 이동 예정.
  */
 @Entity
 @Table(name = "simulation_scenarios")
@@ -50,6 +51,12 @@ public class SimulationScenario extends SoftDeletableEntity {
 
     @Column(name = "ended_at")
     private Instant endedAt;
+
+    /** 해제 — 정상 복귀 (docs/06 §8 DELETE). 행은 이력으로 남기고 active=false로만 끈다. */
+    public void deactivate(Instant endedAt) {
+        this.active = false;
+        this.endedAt = endedAt;
+    }
 
     @Builder
     private SimulationScenario(Long sensorId, Type type, String param, boolean active,
