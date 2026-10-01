@@ -31,6 +31,9 @@ import java.time.Instant;
 @SQLRestriction("deleted_at IS NULL")
 public class Inspection extends SoftDeletableEntity {
 
+    /** MySQL TEXT 상한(64KB). length를 안 주면 Hibernate가 255로 잡아 tinytext가 만들어진다. */
+    private static final int TEXT_LENGTH = 65_535;
+
     /** PM=예방보전, BM=사후보전 */
     public enum Type {
         PM, BM
@@ -71,11 +74,11 @@ public class Inspection extends SoftDeletableEntity {
     private Integer durationMin;
 
     @Lob
-    @Column(name = "content", nullable = false)
+    @Column(name = "content", nullable = false, length = TEXT_LENGTH)
     private String content;
 
     @Lob
-    @Column(name = "action_taken")
+    @Column(name = "action_taken", length = TEXT_LENGTH)
     private String actionTaken;
 
     @Enumerated(EnumType.STRING)

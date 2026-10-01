@@ -12,7 +12,9 @@ services:
       MYSQL_PASSWORD: fabwatch_local
       TZ: UTC
     ports:
-      - "3306:3306"
+      # 호스트 3306은 로컬 MariaDB 등이 이미 점유하는 경우가 있어 3307로 노출한다.
+      # 다른 포트를 쓰려면 MYSQL_HOST_PORT 환경변수로 override.
+      - "${MYSQL_HOST_PORT:-3307}:3306"
     volumes:
       - fabwatch_mysql_data:/var/lib/mysql
     healthcheck:

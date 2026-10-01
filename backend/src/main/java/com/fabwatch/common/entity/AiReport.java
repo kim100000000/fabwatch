@@ -26,6 +26,9 @@ import org.hibernate.annotations.SQLRestriction;
 @SQLRestriction("deleted_at IS NULL")
 public class AiReport extends SoftDeletableEntity {
 
+    /** MySQL MEDIUMTEXT 상한(16MB). @Column(length)로 넘겨야 Hibernate가 MEDIUMTEXT로 DDL을 만든다. */
+    private static final int MEDIUMTEXT_LENGTH = 16_777_215;
+
     public enum Status {
         GENERATING, DRAFT, CONFIRMED, FAILED
     }
@@ -47,13 +50,17 @@ public class AiReport extends SoftDeletableEntity {
     @Column(name = "status", length = 15, nullable = false)
     private Status status;
 
-    /** AI 원본 — 수정 금지 */
+    /**
+     * AI 원본 — 수정 금지.
+     * length를 명시하지 않으면 Hibernate가 기본 255로 잡아 MySQL에서 tinytext가 생성된다(실기동 시 시드 삽입 실패).
+     * docs/05 스펙대로 MEDIUMTEXT가 되도록 16MB 길이를 지정한다.
+     */
     @Lob
-    @Column(name = "draft_content")
+    @Column(name = "draft_content", length = MEDIUMTEXT_LENGTH)
     private String draftContent;
 
     @Lob
-    @Column(name = "final_content")
+    @Column(name = "final_content", length = MEDIUMTEXT_LENGTH)
     private String finalContent;
 
     @Column(name = "fail_reason", length = 300)
