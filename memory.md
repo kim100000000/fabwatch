@@ -94,9 +94,11 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 ## 5. 다음 작업 지시 (그대로 실행 가능)
 
 ```
-[결정 대기] 상태 머신 개선안 (2026-10-01 논의): DOWN을 BM(계획 외 정지)으로 취급, DOWN→IDLE 직행 허용(사유+BM이력 연결),
-   DOWN→RUN은 ENGINEER+ 사유 필수, MTTR을 DOWN~IDLE 복귀로 재정의. 사용자 확정 후 docs/03 F-2 → 코드 → UI → 테스트 순으로 수정.
-   알람 센터에서 해제 사유(조치 내용) 표시 여부 확인 필요 (상태 필터로 해제 알람 조회는 가능).
+3주차 F-3 구현 시 함께 처리 (상태 머신 개선 2026-10-02 후속):
+   - DOWN 이탈(DOWN→IDLE/RUN) 시 BM 점검이력 연결을 "권장→강제"로 올리는 건 F-3 이후 단계 (사용자 결정). 지금은 사유만 필수.
+   - 알람 센터에서 해제 사유(조치 내용) 표시 여부 확인 필요 (상태 필터로 해제 알람 조회는 가능).
+   - 시뮬레이터 DRIFT는 상한이 없어 시나리오를 안 끄면 값이 무한 상승(실측: 수 시간 뒤 온도 1721℃). crit 도달 후 클램프 또는 자동 해제 고려.
+   - QA LOW 잔여: DOWN→IDLE이 역할값을 보지 않음(알려진 3역할 선결조건 권장, EquipmentService.validateManualChange), 판정순서(403→400) 테스트·null/미지 역할 테스트 없음, POST /alarms/manual로 TECHNICIAN이 CRITICAL을 올리면 autoDown 발생(기존 설계, docs/03에 명시 권장).
 
 3주차 본작업 (F-3 점검이력 + F-6 AI리포트):
 1. inspection/: 점검 이력 등록(PM체크리스트/BM 4M분류), PM스케줄(주기설정→next_due_at계산,
@@ -119,6 +121,7 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 
 | 날짜 | 작업 | 결과/결정 |
 |---|---|---|
+| 2026-10-02 | **상태 머신 개선(F-2)** (하네스: backend-dev/frontend-dev 병렬 → mes-qa) | DOWN=BM(계획 외 정지) 취급, 라벨 "DOWN (BM)". 신규 DOWN→IDLE(사유 필수, TECHNICIAN 포함 전 역할), DOWN→RUN(사유 필수, ENGINEER+), DOWN→PM 유지, PM→RUN 계속 불가. 권한 판정은 EquipmentService.validateManualChange 한 곳(404→400허용표→403권한→400사유). MTTR 정의 DOWN 진입~이탈로 변경(구현은 4주차). 별도 컬럼 없이 로그의 DOWN→RUN이 시운전 생략 표시. 문서 6종(03/06/11/12/14+memory) 동기화. 테스트 114→156 통과, 프론트 build/lint 통과. QA: HIGH 0 / MED 3(설비수정폼 라벨 누락, docs/11 권한표 stale, 시드가 DOWN→PM 경로) 모두 수정. 실서버 확인: 브라우저 DOWN→IDLE 직행 성공, TECHNICIAN API 403/400/403 확인. 리포트: `.claude/_workspace/qa/f2-상태머신개선_20261002.md`. 실DB는 기존 시드 로그 유지(시드는 빈 DB에서만 실행) |
 | 2026-10-01 | 실MySQL 기동 + 3분 시연 (2주 연속 미룬 항목 해소) | docker MySQL(3307)+bootRun+vite, 브라우저로 DRIFT→경고→임계→자동DOWN, STEP→경고 확인. 실기동에서만 드러난 결함 2종 수정(@Lob tinytext, 포트 충돌). 상태 머신 DOWN→PM 강제 경로가 현장 흐름과 안 맞는다는 지적 → 개선안은 결정 대기 |
 | 2026-08-10 | **2주차 완료** (하네스 3-agent: backend-dev/frontend-dev/mes-qa) | 시뮬레이터(F-4)+SSE(sensor/alarm/status 3종)+알람(임계치판정+중복억제+CRITICAL자동DOWN)+임계치API(FR-2.3 이월분) 백엔드, 대시보드(S-1)+센서탭(S-3)+알람센터(S-6) 프론트(Playwright 실측검증 포함). QA에서 실결함 3건 발견·수정(에러코드 미매핑으로 DB컬럼명 노출, 미해결알람 0으로 오도표시, 존재안하는 클래스 언급하는 허위 보안주석). QA가 이번엔 "리포트 먼저 저장" 순서를 지켜서 중단 리스크 없이 완료. docs/05·06 드리프트 3건 리더가 직접 동기화. 미완료: 임계치 편집화면(UI), 실MySQL 3분시연(2주 연속 미룸 — 3주차 착수 전 필수) |
 | 2026-08-09 | S-2/S-3 프론트 연결 (1주차 잔여 마무리) + QA 2라운드 | 설비 등록/수정 폼, 상태변경 다이얼로그(허용전이만 후보), 상태이력 탭 구현. QA 서브에이전트가 검증 도중 워치독 타임아웃으로 중단돼, 리더가 직접 핵심 위험 4項(전이표/에러코드/응답shape/권한매트릭스) 재대조 — 전부 일치, 결함 없음. 리포트: `.claude/_workspace/qa/f2-설비상태변경UI연결_20260809.md`. GitHub `kim100000000/fabwatch`(public) 생성, develop을 기본 브랜치로 전환 |

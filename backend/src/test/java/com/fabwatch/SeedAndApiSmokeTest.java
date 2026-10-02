@@ -145,20 +145,88 @@ class SeedAndApiSmokeTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("DOWN"));
 
-        // DOWN → RUN 은 허용되지 않는다 (DOWN에서는 PM으로만)
-        mockMvc.perform(patch("/api/v1/equipments/{id}/status", equipmentId)
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"toStatus":"RUN","reason":"임의 복구"}"""))
+        // PM → RUN 은 허용되지 않는다 (시운전 경유 원칙). DOWN → PM → RUN 시도
+        patchStatus(token, equipmentId, "PM", "BM 병행 정비").andExpect(status().isOk());
+        patchStatus(token, equipmentId, "RUN", "임의 복구")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_STATUS_TRANSITION"));
 
         mockMvc.perform(get("/api/v1/equipments/{id}/status-logs", equipmentId)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].toStatus").value("DOWN"))
+                .andExpect(jsonPath("$.content[0].toStatus").value("PM"))
+                .andExpect(jsonPath("$.content[1].toStatus").value("DOWN"))
                 .andExpect(jsonPath("$.content[0].changedByName").value("박엔지니어"));
+    }
+
+    @Test
+    @DisplayName("SM-3a/3b: DOWN→IDLE은 TECHNICIAN도 가능, reason 공백이면 400 VALIDATION_ERROR")
+    void DOWN_IDLE_전_역할_사유필수() throws Exception {
+        String engineer = login("engineer@fabwatch.dev");
+        String tech = login("tech@fabwatch.dev");
+        Long equipmentId = findEquipmentId(engineer, "AOI-01");
+
+        // 상태가 무엇이든 DOWN으로 만든다 (RUN/IDLE → DOWN 모두 허용, 이미 DOWN이면 건너뜀)
+        if (!"DOWN".equals(currentStatus(engineer, equipmentId))) {
+            patchStatus(engineer, equipmentId, "DOWN", "수동 고장 보고").andExpect(status().isOk());
+        }
+
+        // TECHNICIAN 이라도 reason 공백이면 400 VALIDATION_ERROR (권한은 통과)
+        patchStatus(tech, equipmentId, "IDLE", "   ")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        mockMvc.perform(patch("/api/v1/equipments/{id}/status", equipmentId)
+                        .header("Authorization", "Bearer " + tech)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"toStatus\":\"IDLE\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        // TECHNICIAN DOWN→IDLE 성공
+        patchStatus(tech, equipmentId, "IDLE", "센서 교체 완료, 시운전 대기")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IDLE"));
+        mockMvc.perform(get("/api/v1/equipments/{id}/status-logs", equipmentId)
+                        .header("Authorization", "Bearer " + tech))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].fromStatus").value("DOWN"))
+                .andExpect(jsonPath("$.content[0].toStatus").value("IDLE"))
+                .andExpect(jsonPath("$.content[0].changedByName").value("이테크니션"));
+    }
+
+    @Test
+    @DisplayName("SM-6: DOWN→RUN은 ENGINEER 허용(사유 필수), TECHNICIAN은 403 FORBIDDEN")
+    void DOWN_RUN_권한과_사유() throws Exception {
+        String engineer = login("engineer@fabwatch.dev");
+        String tech = login("tech@fabwatch.dev");
+        Long equipmentId = findEquipmentId(engineer, "LAMI-01");
+
+        if (!"DOWN".equals(currentStatus(engineer, equipmentId))) {
+            patchStatus(engineer, equipmentId, "DOWN", "수동 고장 보고").andExpect(status().isOk());
+        }
+
+        patchStatus(tech, equipmentId, "RUN", "시운전 생략")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+                .andExpect(jsonPath("$.timestamp").exists());
+        patchStatus(engineer, equipmentId, "RUN", "")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        patchStatus(engineer, equipmentId, "RUN", "긴급 생산 재개, 시운전 생략")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("RUN"));
+    }
+
+    @Test
+    @DisplayName("TECHNICIAN은 DOWN→IDLE 외 상태 전환 불가 — RUN→DOWN은 403 FORBIDDEN")
+    void 테크니션_일반_전환_거부() throws Exception {
+        String engineer = login("engineer@fabwatch.dev");
+        String tech = login("tech@fabwatch.dev");
+        Long equipmentId = findEquipmentId(engineer, "OVEN-01");
+
+        patchStatus(tech, equipmentId, "DOWN", "수동 고장 보고")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
     }
 
     @Test
@@ -185,6 +253,22 @@ class SeedAndApiSmokeTest {
                         .content("{\"refreshToken\":\"" + oldRefresh + "\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INVALID_TOKEN"));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions patchStatus(
+            String token, Long equipmentId, String toStatus, String reason) throws Exception {
+        return mockMvc.perform(patch("/api/v1/equipments/{id}/status", equipmentId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(java.util.Map.of("toStatus", toStatus, "reason", reason))));
+    }
+
+    private String currentStatus(String token, Long equipmentId) throws Exception {
+        String body = mockMvc.perform(get("/api/v1/equipments/{id}", equipmentId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(body).get("status").asText();
     }
 
     private String login(String email) throws Exception {

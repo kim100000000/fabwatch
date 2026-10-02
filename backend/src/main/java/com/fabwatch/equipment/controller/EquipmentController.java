@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 설비 API (docs/06 §2). 권한은 docs/11 §3 매트릭스 기준:
- * 조회=전체 / 등록·수정=ADMIN / 상태 전환=ADMIN·ENGINEER
+ * 조회=전체 / 등록·수정=ADMIN / 상태 전환=인증 사용자 전체(전이별 역할 판정은 EquipmentService)
  */
 @RestController
 @RequestMapping("/api/v1/equipments")
@@ -65,12 +65,14 @@ public class EquipmentController {
         return equipmentService.update(id, request);
     }
 
-    /** 상태 전환 — 상태 머신 밖의 전이는 400 INVALID_STATUS_TRANSITION */
+    /**
+     * 상태 전환 — 상태 머신 밖의 전이는 400 INVALID_STATUS_TRANSITION.
+     * 전이별 권한(기본 ENGINEER+, DOWN→IDLE은 전 역할)은 서비스 한 곳에서 판정하므로 여기선 인증만 요구한다.
+     */
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('ADMIN','ENGINEER')")
     public EquipmentDetailResponse changeStatus(@PathVariable Long id,
                                                 @Valid @RequestBody EquipmentStatusChangeRequest request) {
-        return equipmentService.changeStatus(id, request, SecurityUtils.currentUserId());
+        return equipmentService.changeStatus(id, request, SecurityUtils.currentUserId(), SecurityUtils.currentRole());
     }
 
     @GetMapping("/{id}/status-logs")

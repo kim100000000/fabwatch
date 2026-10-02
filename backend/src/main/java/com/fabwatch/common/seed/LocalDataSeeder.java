@@ -405,8 +405,7 @@ public class LocalDataSeeder implements CommandLineRunner {
         scripts.put("LAMI-01", List.of(
                 new Object[]{EquipmentStatus.RUN, 720, "생산 시작"},
                 new Object[]{EquipmentStatus.DOWN, 312, "CRITICAL 알람 자동 DOWN (진동 임계 초과)"},
-                new Object[]{EquipmentStatus.PM, 306, "BM 착수"},
-                new Object[]{EquipmentStatus.IDLE, 290, "정비 완료 — 시운전 대기"},
+                new Object[]{EquipmentStatus.IDLE, 290, "BM 수리 완료 — 시운전 대기"},
                 new Object[]{EquipmentStatus.RUN, 288, "시운전 정상 — 생산 재개"}));
         scripts.put("LAMI-02", List.of(
                 new Object[]{EquipmentStatus.RUN, 720, "생산 시작"},
@@ -421,8 +420,7 @@ public class LocalDataSeeder implements CommandLineRunner {
         scripts.put("SCRB-01", List.of(
                 new Object[]{EquipmentStatus.RUN, 720, "생산 시작"},
                 new Object[]{EquipmentStatus.DOWN, 168, "CRITICAL 알람 자동 DOWN (진동 임계 초과)"},
-                new Object[]{EquipmentStatus.PM, 160, "BM 착수"},
-                new Object[]{EquipmentStatus.IDLE, 150, "정비 완료 — 시운전 대기"}));
+                new Object[]{EquipmentStatus.IDLE, 150, "BM 수리 완료 — 시운전 대기"}));
         scripts.put("AOI-01", List.of(
                 new Object[]{EquipmentStatus.RUN, 720, "생산 시작"},
                 new Object[]{EquipmentStatus.IDLE, 360, "자재 대기"},

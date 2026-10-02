@@ -19,7 +19,12 @@ export { EquipmentInfoPanel } from './components/EquipmentInfoPanel'
 export { EquipmentFormDialog } from './components/EquipmentFormDialog'
 export { EquipmentStatusDialog } from './components/EquipmentStatusDialog'
 export { EquipmentStatusLogTable } from './components/EquipmentStatusLogTable'
-export { EQUIPMENT_STATUSES, ALLOWED_STATUS_TRANSITIONS } from './types'
+export {
+  EQUIPMENT_STATUSES,
+  ALLOWED_STATUS_TRANSITIONS,
+  getStatusCandidates,
+  isReasonRequired,
+} from './types'
 export type {
   EquipmentStatus,
   EquipmentSummary,

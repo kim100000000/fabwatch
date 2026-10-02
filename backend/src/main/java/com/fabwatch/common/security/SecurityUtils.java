@@ -28,4 +28,11 @@ public final class SecurityUtils {
                 .map(AuthPrincipal::userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
     }
+
+    /** 현재 로그인 사용자의 역할명(ADMIN/ENGINEER/TECHNICIAN). 인증 정보가 없으면 401. */
+    public static String currentRole() {
+        return currentPrincipal()
+                .map(AuthPrincipal::role)
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
+    }
 }

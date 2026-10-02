@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { toApiError } from '@/shared/api'
+import { statusLabel } from '@/shared/lib/equipmentStatus'
 import { toUserMessage } from '@/shared/lib/errorMessage'
 import { LoadingBlock, Modal, Spinner } from '@/shared/ui'
 import { createEquipment, updateEquipment } from '../api/equipmentApi'
@@ -151,7 +152,7 @@ export function EquipmentFormDialog({ equipmentId, onClose, onSaved }: Equipment
             <div className="field">
               <label>상태</label>
               <p className="field-readonly mono">
-                {equipment.status}
+                {statusLabel(equipment.status)}
                 <span className="field-hint">상태는 상세 화면의 [상태 변경]에서만 바꿀 수 있습니다.</span>
               </p>
             </div>

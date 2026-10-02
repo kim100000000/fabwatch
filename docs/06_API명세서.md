@@ -23,7 +23,7 @@
 | POST | /equipments | 설비 등록 | ADMIN |
 | GET | /equipments/{id} | 상세 (기본정보+센서+PM스케줄+미해결알람수) | 전체 |
 | PUT | /equipments/{id} | 수정 | ADMIN |
-| PATCH | /equipments/{id}/status | `{toStatus, reason}` 상태 전환. 400 `INVALID_STATUS_TRANSITION` | ENGINEER+ |
+| PATCH | /equipments/{id}/status | `{toStatus, reason}` 상태 전환. 400 `INVALID_STATUS_TRANSITION`. `DOWN→IDLE`·`DOWN→RUN`은 reason 필수(400 `VALIDATION_ERROR`). **권한: 기본 ENGINEER+, 단 `DOWN→IDLE`은 TECHNICIAN도 가능** (docs/03 F-2) | ENGINEER+ (DOWN→IDLE은 전체) |
 | GET | /equipments/{id}/status-logs | 상태 변경 이력 | 전체 |
 | GET | /equipments/{id}/kpi | `?period=DAY|WEEK|MONTH` → `{mtbfHours, mttrMin, availability, downCount}` | 전체 |
 

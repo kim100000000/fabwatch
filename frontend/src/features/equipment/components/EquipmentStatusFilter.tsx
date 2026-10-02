@@ -1,3 +1,4 @@
+import { statusLabel } from '@/shared/lib/equipmentStatus'
 import { EQUIPMENT_STATUSES } from '../types'
 import type { EquipmentStatus } from '../types'
 import './equipment.css'
@@ -26,7 +27,7 @@ export function EquipmentStatusFilter({ value, onChange }: EquipmentStatusFilter
           className={value === status ? 'filter-chip active' : 'filter-chip'}
           onClick={() => onChange(value === status ? null : status)}
         >
-          {status}
+          {statusLabel(status)}
         </button>
       ))}
     </div>

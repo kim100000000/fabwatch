@@ -103,13 +103,18 @@ public class Equipment extends SoftDeletableEntity {
      * 전환 기록(status log) 생성은 서비스 책임.
      */
     public EquipmentStatus changeStatus(EquipmentStatus to) {
+        validateTransition(to);
+        EquipmentStatus from = this.status;
+        this.status = to;
+        return from;
+    }
+
+    /** 상태 머신 규칙 밖의 전이면 400 INVALID_STATUS_TRANSITION. 상태는 바꾸지 않는다. */
+    public void validateTransition(EquipmentStatus to) {
         if (!status.canTransitionTo(to)) {
             throw new BusinessException(ErrorCode.INVALID_STATUS_TRANSITION,
                     "허용되지 않는 상태 전환입니다: " + status + " → " + to
                             + " (허용: " + status.allowedTargets() + ")");
         }
-        EquipmentStatus from = this.status;
-        this.status = to;
-        return from;
     }
 }

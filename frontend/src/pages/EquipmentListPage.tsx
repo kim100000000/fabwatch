@@ -9,6 +9,7 @@ import {
   useEquipmentList,
 } from '@/features/equipment'
 import type { EquipmentDetail, EquipmentStatus } from '@/features/equipment'
+import { statusLabel } from '@/shared/lib/equipmentStatus'
 import { EmptyState, ErrorState, LoadingBlock } from '@/shared/ui'
 
 type ViewMode = 'table' | 'card'
@@ -104,7 +105,7 @@ export function EquipmentListPage() {
       {!loading && !error && equipments.length === 0 && (
         <EmptyState
           title="표시할 설비가 없습니다"
-          description={status ? `상태 ${status} 에 해당하는 설비가 없습니다.` : '설비 마스터를 먼저 등록하세요.'}
+          description={status ? `상태 ${statusLabel(status)} 에 해당하는 설비가 없습니다.` : '설비 마스터를 먼저 등록하세요.'}
         />
       )}
 

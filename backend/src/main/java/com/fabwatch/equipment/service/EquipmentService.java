@@ -47,6 +47,9 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class EquipmentService {
 
+    private static final String ROLE_ADMIN = "ADMIN";
+    private static final String ROLE_ENGINEER = "ENGINEER";
+
     private final EquipmentRepository equipmentRepository;
     private final ProcessRepository processRepository;
     private final LineRepository lineRepository;
@@ -145,20 +148,53 @@ public class EquipmentService {
     }
 
     /**
-     * PATCH /equipments/{id}/status — 상태 전환 (ADMIN/ENGINEER).
-     * 허용되지 않는 전이는 400 INVALID_STATUS_TRANSITION (docs/03 F-2).
+     * PATCH /equipments/{id}/status — 상태 전환 (docs/03 F-2, docs/06 §2).
+     * 판정 순서: 404(설비 없음) → 400 INVALID_STATUS_TRANSITION(허용표 밖) → 403 FORBIDDEN(전이별 역할)
+     * → 400 VALIDATION_ERROR(사유 필수). 전이별 권한·사유 판정은 validateManualChange() 한 곳에서만 한다.
      * ※ DB 필드 변경일 뿐 실제 설비를 정지시키는 물리 제어가 아니다 (docs/11 §10).
+     *
+     * @param actorRole 호출자 역할명(ADMIN/ENGINEER/TECHNICIAN) — JWT 클레임 기준
      */
     @Transactional
-    public EquipmentDetailResponse changeStatus(Long id, EquipmentStatusChangeRequest request, Long actorUserId) {
+    public EquipmentDetailResponse changeStatus(Long id, EquipmentStatusChangeRequest request,
+                                                Long actorUserId, String actorRole) {
         Equipment equipment = findEquipment(id);
-        EquipmentStatus from = equipment.changeStatus(request.toStatus());
+        EquipmentStatus to = request.toStatus();
+        validateManualChange(equipment, to, request.reason(), actorRole);
+
+        EquipmentStatus from = equipment.changeStatus(to);
         Instant changedAt = Instant.now();
         statusLogRepository.save(new EquipmentStatusLog(
-                equipment, from, request.toStatus(), request.reason(), actorUserId, changedAt));
-        log.info("설비 상태 전환: code={}, {} → {}, 사유={}", equipment.getCode(), from, request.toStatus(), request.reason());
+                equipment, from, to, request.reason(), actorUserId, changedAt));
+        log.info("설비 상태 전환: code={}, {} → {}, 사유={}", equipment.getCode(), from, to, request.reason());
         publishStatusChanged(equipment, from, request.reason(), actorUserId, changedAt);
         return EquipmentDetailResponse.from(equipment, managerName(equipment.getManagerId()));
+    }
+
+    /**
+     * 수동 전환의 전이별 규칙 판정 (한 곳).
+     * - 허용표 밖 → 400 INVALID_STATUS_TRANSITION (Equipment.validateTransition)
+     * - 기본 ENGINEER 이상(ADMIN 포함). 예외: DOWN → IDLE 은 TECHNICIAN 포함 전 역할 → 그 외 403 FORBIDDEN
+     * - DOWN → IDLE / DOWN → RUN 은 reason 공백·null 불가 → 400 VALIDATION_ERROR
+     * 자동 DOWN(autoDown)은 이 검사를 거치지 않는다(시스템 전환, 역할 없음).
+     */
+    private void validateManualChange(Equipment equipment, EquipmentStatus to, String reason, String actorRole) {
+        equipment.validateTransition(to);
+        EquipmentStatus from = equipment.getStatus();
+
+        boolean allRolesAllowed = from == EquipmentStatus.DOWN && to == EquipmentStatus.IDLE;
+        boolean engineerOrAbove = ROLE_ADMIN.equals(actorRole) || ROLE_ENGINEER.equals(actorRole);
+        if (!allRolesAllowed && !engineerOrAbove) {
+            throw new BusinessException(ErrorCode.FORBIDDEN,
+                    "해당 상태 전환 권한이 없습니다: " + from + " → " + to + " (ENGINEER 이상 필요)");
+        }
+
+        boolean reasonRequired = from == EquipmentStatus.DOWN
+                && (to == EquipmentStatus.IDLE || to == EquipmentStatus.RUN);
+        if (reasonRequired && (reason == null || reason.isBlank())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "DOWN에서 복귀(" + from + " → " + to + ")할 때는 사유(reason)가 필수입니다.");
+        }
     }
 
     /**

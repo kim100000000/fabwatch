@@ -59,7 +59,7 @@ export async function updateEquipment(
 }
 
 /**
- * PATCH /equipments/{id}/status — 상태 전환 (ADMIN·ENGINEER).
+ * PATCH /equipments/{id}/status — 상태 전환 (ENGINEER+, DOWN→IDLE 은 전 역할).
  * 상태 머신 밖의 전이는 400 INVALID_STATUS_TRANSITION (message 에 허용 전이 목록 포함).
  */
 export async function changeEquipmentStatus(

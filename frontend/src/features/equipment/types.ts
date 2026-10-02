@@ -4,8 +4,10 @@
  * 존재가 불확실한 필드는 optional 로 두되 임의 변환 로직은 넣지 않는다.
  */
 
-/** equipments.status */
-export type EquipmentStatus = 'RUN' | 'IDLE' | 'DOWN' | 'PM'
+import type { UserRole } from '@/features/auth'
+import type { EquipmentStatus } from '@/shared/lib/equipmentStatus'
+
+export type { EquipmentStatus }
 
 /** sensors.type */
 export type SensorType = 'TEMP' | 'VIBRATION' | 'PRESSURE' | 'CURRENT'
@@ -96,7 +98,7 @@ export interface EquipmentUpdateRequest {
   note?: string | null
 }
 
-/** PATCH /equipments/{id}/status 요청 (ADMIN·ENGINEER) */
+/** PATCH /equipments/{id}/status 요청 (ENGINEER+, DOWN→IDLE 은 전 역할). DOWN→IDLE/RUN 은 reason 필수 */
 export interface EquipmentStatusChangeRequest {
   toStatus: EquipmentStatus
   reason?: string | null
@@ -140,11 +142,31 @@ export const EQUIPMENT_STATUSES: EquipmentStatus[] = ['RUN', 'IDLE', 'DOWN', 'PM
 
 /**
  * 상태 전이표 (docs/03 F-2 — 백엔드 EquipmentStatus 와 동일).
- * 화면에서는 후보 버튼을 좁히는 UX 용도로만 쓰고, 최종 검증은 항상 서버(400 INVALID_STATUS_TRANSITION)가 한다.
+ *   RUN↔IDLE / RUN·IDLE→DOWN / RUN·IDLE→PM / PM→IDLE
+ *   DOWN→IDLE(전 역할, 사유 필수) / DOWN→RUN(ENGINEER+, 사유 필수) / DOWN→PM(정비 병행 정기 PM)
+ * PM→RUN 은 후보에 없다(정비 후 시운전 대기를 거쳐야 하는 현장 원칙).
+ * 화면에서는 후보 버튼을 좁히는 UX 용도로만 쓰고, 최종 검증은 항상 서버(400 INVALID_STATUS_TRANSITION / 403 FORBIDDEN)가 한다.
  */
 export const ALLOWED_STATUS_TRANSITIONS: Record<EquipmentStatus, EquipmentStatus[]> = {
   RUN: ['IDLE', 'DOWN', 'PM'],
   IDLE: ['RUN', 'DOWN', 'PM'],
-  DOWN: ['PM'],
+  DOWN: ['IDLE', 'RUN', 'PM'],
   PM: ['IDLE'],
+}
+
+/** 사유(reason) 필수 전이 — DOWN 이탈(복귀) 시 조치 내용을 남긴다 (400 VALIDATION_ERROR) */
+export function isReasonRequired(from: EquipmentStatus, to: EquipmentStatus): boolean {
+  return from === 'DOWN' && (to === 'IDLE' || to === 'RUN')
+}
+
+/**
+ * 역할별 전환 후보 (docs/03 F-2, docs/06 PATCH /equipments/{id}/status).
+ * - ADMIN/ENGINEER: 전이표 전체
+ * - TECHNICIAN: DOWN→IDLE 만 (DOWN→RUN 은 시운전 생략이라 불가 — 후보로 노출하지 않는다)
+ */
+export function getStatusCandidates(from: EquipmentStatus, role: UserRole | undefined): EquipmentStatus[] {
+  const all = ALLOWED_STATUS_TRANSITIONS[from] ?? []
+  if (role === 'ADMIN' || role === 'ENGINEER') return all
+  if (role === 'TECHNICIAN') return from === 'DOWN' ? all.filter((to) => to === 'IDLE') : []
+  return []
 }

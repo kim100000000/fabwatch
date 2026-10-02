@@ -8,6 +8,7 @@ import type { Alarm, AlarmEventPayload } from '@/features/alarm'
 import { EquipmentLiveCard, useLatestSensors, useSensorStream } from '@/features/sensor'
 import type { EquipmentStatusEventPayload, SensorEventPayload } from '@/features/sensor'
 import { DemoControlPanel } from '@/features/simulator'
+import { statusLabel } from '@/shared/lib/equipmentStatus'
 import { ErrorState, LoadingBlock, StreamStatusBadge } from '@/shared/ui'
 import './dashboard.css'
 
@@ -165,7 +166,7 @@ export function DashboardPage() {
       <div className="kpi-strip">
         {EQUIPMENT_STATUSES.map((status) => (
           <div key={status} className="kpi-item" data-status={status}>
-            <span className="kpi-label">{status}</span>
+            <span className="kpi-label">{statusLabel(status)}</span>
             <span className="kpi-value mono">{statusCount[status]}</span>
           </div>
         ))}

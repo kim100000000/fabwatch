@@ -6,22 +6,26 @@ import {
   EquipmentFormDialog,
   EquipmentInfoPanel,
   EquipmentStatusDialog,
+  getStatusCandidates,
   useEquipmentDetail,
 } from '@/features/equipment'
+import { statusLabel } from '@/shared/lib/equipmentStatus'
 import { ErrorState, LoadingBlock, StatusBadge } from '@/shared/ui'
 
-/** S-3 설비 상세 (/equipment/:id) — GET /equipments/{id} + 수정(ADMIN) / 상태 변경(ADMIN·ENGINEER) */
+/** S-3 설비 상세 (/equipment/:id) — GET /equipments/{id} + 수정(ADMIN) / 상태 변경(ENGINEER+, DOWN 일 때는 TECHNICIAN 도) */
 export function EquipmentDetailPage() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const equipmentId = id ? Number(id) : null
   const { user } = useAuth()
 
-  // 권한: 수정=ADMIN / 상태 전환=ADMIN·ENGINEER (docs/06 §2, docs/11 §3) — 서버도 동일하게 막는다
+  // 권한: 수정=ADMIN / 상태 전환=ENGINEER+ 이며 DOWN→IDLE 만 전 역할 (docs/03 F-2, docs/06 §2) — 서버도 동일하게 막는다
   const canEdit = user?.role === 'ADMIN'
-  const canChangeStatus = user?.role === 'ADMIN' || user?.role === 'ENGINEER'
 
   const { equipment, loading, error, refetch } = useEquipmentDetail(equipmentId)
+
+  // 역할 × 현재 상태로 후보가 하나라도 있어야 버튼을 보인다 (TECHNICIAN 은 DOWN 일 때만 IDLE 후보)
+  const canChangeStatus = equipment != null && getStatusCandidates(equipment.status, user?.role).length > 0
 
   const [editOpen, setEditOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
@@ -103,7 +107,7 @@ export function EquipmentDetailPage() {
               onClose={() => setStatusOpen(false)}
               onChanged={(updated) => {
                 setStatusOpen(false)
-                setNotice(`상태를 ${updated.status} 로 변경했습니다. 상태 이력 탭에서 확인할 수 있습니다.`)
+                setNotice(`상태를 ${statusLabel(updated.status)} 로 변경했습니다. 상태 이력 탭에서 확인할 수 있습니다.`)
                 setStatusLogReloadKey((key) => key + 1)
                 refetch()
               }}
