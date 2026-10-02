@@ -1,19 +1,19 @@
 import { useState } from 'react'
-import { EmptyState } from '@/shared/ui'
 import { SensorTabPanel } from '@/features/sensor'
 import { EquipmentAlarmTabPanel } from '@/features/alarm'
 import { EquipmentInspectionTabPanel } from '@/features/inspection'
+import { AlarmReportButton, EquipmentReportTabPanel, InspectionReportButton } from '@/features/aireport'
 import { EquipmentStatusLogTable } from './EquipmentStatusLogTable'
 import type { EquipmentSensor } from '../types'
 import './equipment.css'
 
 /** S-3 탭 구성 (docs/04 §3) + 상태 이력(F-2 상태 로그) */
 const TABS = [
-  { key: 'sensor', label: '센서', next: '' },
-  { key: 'inspection', label: '점검', next: '' },
-  { key: 'alarm', label: '알람', next: '' },
-  { key: 'report', label: '리포트', next: '3주차: AI 리포트 카드 목록 (DRAFT/CONFIRMED 배지)' },
-  { key: 'statusLog', label: '상태 이력', next: '' },
+  { key: 'sensor', label: '센서' },
+  { key: 'inspection', label: '점검' },
+  { key: 'alarm', label: '알람' },
+  { key: 'report', label: '리포트' },
+  { key: 'statusLog', label: '상태 이력' },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
@@ -28,7 +28,8 @@ interface EquipmentDetailTabsProps {
 
 /**
  * 설비 상세 탭.
- * 센서·점검·알람·상태 이력은 구현 완료, 리포트는 aireport 구현 라운드에서 채운다.
+ * 센서·점검·알람·리포트·상태 이력. 알람/점검 탭의 'AI 리포트' 버튼은 aireport 컴포넌트를 슬롯으로 주입한다
+ * (alarm/inspection → aireport 직접 import 는 순환 의존이라 이 조립 지점에서 연결).
  */
 export function EquipmentDetailTabs({
   equipmentId,
@@ -36,7 +37,6 @@ export function EquipmentDetailTabs({
   statusLogReloadKey = 0,
 }: EquipmentDetailTabsProps) {
   const [active, setActive] = useState<TabKey>('sensor')
-  const activeTab = TABS.find((tab) => tab.key === active) ?? TABS[0]
 
   return (
     <section>
@@ -57,19 +57,24 @@ export function EquipmentDetailTabs({
 
       <div className="tab-panel" role="tabpanel">
         {active === 'sensor' && <SensorTabPanel equipmentId={equipmentId} sensors={sensors} />}
-        {active === 'inspection' && <EquipmentInspectionTabPanel equipmentId={equipmentId} />}
-        {active === 'alarm' && <EquipmentAlarmTabPanel equipmentId={equipmentId} />}
+        {active === 'inspection' && (
+          <EquipmentInspectionTabPanel
+            equipmentId={equipmentId}
+            renderDetailActions={(inspection) => (
+              <InspectionReportButton inspectionId={inspection.id} alarmId={inspection.alarmId} type={inspection.type} />
+            )}
+          />
+        )}
+        {active === 'alarm' && (
+          <EquipmentAlarmTabPanel
+            equipmentId={equipmentId}
+            renderExtraActions={(alarm) => <AlarmReportButton alarmId={alarm.id} />}
+          />
+        )}
         {active === 'statusLog' && (
           <EquipmentStatusLogTable equipmentId={equipmentId} reloadKey={statusLogReloadKey} />
         )}
-        {active === 'report' && (
-          <EmptyState
-            title="다음 라운드 구현"
-            description={activeTab.next}
-            icon="◷"
-            action={<span className="placeholder-note">placeholder</span>}
-          />
-        )}
+        {active === 'report' && <EquipmentReportTabPanel equipmentId={equipmentId} />}
       </div>
     </section>
   )

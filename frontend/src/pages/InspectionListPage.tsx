@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/app/providers/useAuth'
+import { InspectionReportButton } from '@/features/aireport'
 import { useEquipmentList } from '@/features/equipment'
 import {
   EMPTY_INSPECTION_FILTER,
@@ -125,6 +126,9 @@ export function InspectionListPage() {
           key={selectedId}
           inspectionId={selectedId}
           onClose={closeDetail}
+          renderExtraActions={(inspection) => (
+            <InspectionReportButton inspectionId={inspection.id} alarmId={inspection.alarmId} type={inspection.type} />
+          )}
           onChanged={(_updated, message) => {
             setNotice(message)
             setReloadKey((key) => key + 1)

@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingBlock } from '@/shared/ui'
 import { toApiError } from '@/shared/api'
@@ -13,6 +14,8 @@ import './alarm.css'
 
 interface EquipmentAlarmTabPanelProps {
   equipmentId: number
+  /** 알람 행 조치 칸 추가 버튼 슬롯 (AlarmTable.renderExtraActions 로 전달) */
+  renderExtraActions?: (alarm: Alarm) => ReactNode
 }
 
 /**
@@ -20,7 +23,7 @@ interface EquipmentAlarmTabPanelProps {
  * 실시간 구독은 센서 탭의 SSE 연결과 중복되지 않도록 여기서는 열지 않는다
  * (탭 전환/조치 후 재조회로 충분 — 신규 알람 실시간 수신은 S-1/S-6 담당).
  */
-export function EquipmentAlarmTabPanel({ equipmentId }: EquipmentAlarmTabPanelProps) {
+export function EquipmentAlarmTabPanel({ equipmentId, renderExtraActions }: EquipmentAlarmTabPanelProps) {
   const navigate = useNavigate()
   const [reloadKey, setReloadKey] = useState(0)
   const [busyAlarmId, setBusyAlarmId] = useState<number | null>(null)
@@ -66,6 +69,7 @@ export function EquipmentAlarmTabPanel({ equipmentId }: EquipmentAlarmTabPanelPr
           onAck={(alarm) => void handleAck(alarm)}
           onResolveRequest={setResolveTarget}
           onOpenInspection={(inspectionId) => navigate(`/inspections?id=${inspectionId}`)}
+          renderExtraActions={renderExtraActions}
         />
       )}
 

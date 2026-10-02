@@ -12,6 +12,7 @@ import {
   useAlarmList,
 } from '@/features/alarm'
 import type { Alarm, AlarmFilterValue } from '@/features/alarm'
+import { AlarmReportButton } from '@/features/aireport'
 import { useEquipmentList } from '@/features/equipment'
 import { useSensorStream } from '@/features/sensor'
 import { EmptyState, ErrorState, LoadingBlock, StreamStatusBadge } from '@/shared/ui'
@@ -179,6 +180,7 @@ export function AlarmCenterPage() {
           onResolveRequest={setResolveTarget}
           onSelectEquipment={(equipmentId) => navigate(`/equipment/${equipmentId}`)}
           onOpenInspection={(inspectionId) => navigate(`/inspections?id=${inspectionId}`)}
+          renderExtraActions={(alarm) => <AlarmReportButton alarmId={alarm.id} />}
         />
       )}
 

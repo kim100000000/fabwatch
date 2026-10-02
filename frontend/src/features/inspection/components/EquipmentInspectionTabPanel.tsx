@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingBlock, Pagination } from '@/shared/ui'
 import { useInspectionList } from '../api/useInspectionList'
+import type { InspectionDetail } from '../types'
 import { usePmSchedules } from '../api/usePmSchedules'
 import { InspectionDetailDialog } from './InspectionDetailDialog'
 import { InspectionTable } from './InspectionTable'
@@ -10,6 +12,8 @@ import './inspection.css'
 
 interface EquipmentInspectionTabPanelProps {
   equipmentId: number
+  /** 상세 모달 하단 추가 버튼 슬롯 (InspectionDetailDialog.renderExtraActions 로 전달) */
+  renderDetailActions?: (inspection: InspectionDetail) => ReactNode
 }
 
 const TAB_PAGE_SIZE = 10
@@ -18,7 +22,10 @@ const TAB_PAGE_SIZE = 10
  * S-3 점검 탭 (docs/04 §3 탭2) — 해당 설비 점검 이력(최신순) + PM 스케줄 카드.
  * [점검 등록] 은 /inspections/new?equipmentId= 로 설비를 사전 선택해 이동한다.
  */
-export function EquipmentInspectionTabPanel({ equipmentId }: EquipmentInspectionTabPanelProps) {
+export function EquipmentInspectionTabPanel({
+  equipmentId,
+  renderDetailActions,
+}: EquipmentInspectionTabPanelProps) {
   const navigate = useNavigate()
   const [page, setPage] = useState(0)
   const [reloadKey, setReloadKey] = useState(0)
@@ -80,6 +87,7 @@ export function EquipmentInspectionTabPanel({ equipmentId }: EquipmentInspection
           key={selectedId}
           inspectionId={selectedId}
           onClose={() => setSelectedId(null)}
+          renderExtraActions={renderDetailActions}
           onChanged={() => {
             setReloadKey((key) => key + 1)
             pm.refetch()

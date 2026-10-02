@@ -51,6 +51,14 @@ fabwatch:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   seed:
     enabled: false
+  ai:
+    # AI 리포트 (docs/13 환경변수 표). 키는 환경변수로만 — 코드/로그/응답/DB에 노출 금지 (docs/11 §5·§7)
+    provider: ${AI_PROVIDER:claude}          # claude | mock (mock은 명시했을 때만 — 키가 없다고 자동 mock 금지)
+    api-key: ${ANTHROPIC_API_KEY:}
+    model: ${AI_MODEL:claude-sonnet-5-5}
+    max-tokens: ${AI_MAX_TOKENS:2000}
+    daily-quota: ${AI_DAILY_QUOTA:20}        # 하루(KST) 전체 호출 시도 수 한도
+    timeout-seconds: 30
   scheduler:
     # @Scheduled 전체 on/off (docs/13 §5). 테스트에서는 false로 꺼서 시간 기반 로직을 격리한다.
     enabled: ${SCHEDULER_ENABLED:true}

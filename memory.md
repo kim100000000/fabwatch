@@ -20,7 +20,7 @@
 | 프론트 | React 18 + TypeScript + Vite, Recharts | |
 | 실시간 | SSE (WebSocket 아님) | 단방향 푸시라 SSE로 충분. 막히면 3초 폴링 폴백 |
 | 센서 데이터 | 시뮬레이터 직접 제작 (외부 데이터셋 X) | 백엔드 내장 @Scheduled 2초 주기. DRIFT/SPIKE/STEP 시나리오 |
-| AI | Claude API (백엔드 경유만, 키는 env) | 리포트 max_tokens 2000, 일 20건 쿼터 |
+| AI | Claude API (백엔드 경유만, 키는 env). 모델 `claude-sonnet-5-5`, `AI_PROVIDER=claude|mock`, effort low, 타임아웃 60초 | 리포트 max_tokens 4096(2000→상향: Sonnet 5.5는 thinking 기본 ON이라 사고 토큰이 max_tokens를 먹음), 일 20건 쿼터(ai_call_logs, KST 일자 전체 합산) |
 | 인증 | JWT Access 30분 + Refresh 14일(DB 저장) | 역할: ADMIN/ENGINEER/TECHNICIAN |
 | 배포 | Railway(백+DB) + Vercel(프론트) | 4주차 |
 | 데이터 정책 | 센서 원본 7일 + 1분 집계 영구, 나머지 soft delete | |
@@ -93,18 +93,28 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 - [x] **QA**: 경계면 검증 HIGH 0 / MED 2(PM 체크리스트 로딩 중 제출 우회, PM 지연 롤백 통합테스트 부재) 수정, 실MySQL 라이브 확인(BM+알람 자동해제·설비 DOWN 유지, PM 등록→스케줄 갱신, 스케줄러가 PM_OVERDUE 알람 5건 생성). 리포트: `.claude/_workspace/qa/f3-점검이력_20261002.md`
 - [x] **라이브에서 발견·수정**: PM 등록해도 기존 OPEN PM_OVERDUE 알람이 남던 결함 → PM 등록 시 같은 설비의 미해결 PM_OVERDUE 알람 자동 해소 (스케줄 갱신 시에만)
 
+### 3주차 F-6 AI 리포트 완료 — 2026-10-03 (mock 기준, 실 Claude 호출은 미검증)
+- [x] **백엔드**: aireport 도메인 신규(AiReport 이동, ai_call_logs 신규). 컨텍스트 수집(알람·센서 1분집계 추이·최근 점검 5·BM 3·4M)은 각 도메인 *QueryService 인터페이스로만 접근. PromptBuilder(순수함수, [[DATA]] 구분자+NFKC 정규화로 인젝션 방어, 개인정보 미포함). ClaudeClient 인터페이스+RestClient 구현(재시도 5xx/타임아웃 1회·429/401/400 무재시도, 키 마스킹). 비동기 202+전용 워커(스레드2·큐10)+재시작 복구(5분). 쿼터 일20건(403 AI_QUOTA_EXCEEDED), 409 ALREADY_GENERATING·INVALID_REPORT_STATE. 확정본 불변(PESSIMISTIC_WRITE 직렬화). draft_content 어떤 경로로도 수정 불가. 테스트 235→365 통과(3회 연속)
+- [x] **프론트**: S-7 목록/상세/편집(좌 에디터·우 미리보기), 2초 폴링(숨김탭 중지·150초 상한), FAILED 재시도/수동 작성, 원본 초안 보기 토글, 확정 확인 다이얼로그, 마크다운 안전 렌더(raw HTML·javascript:·이미지 차단), 설비 리포트 탭, 알람/점검 상세의 생성 진입점(ENGINEER+), 저장 안 한 변경 이탈 가드(라우터를 createBrowserRouter로 교체)
+- [x] **QA**: HIGH 1(thinking 토큰 vs max_tokens) / MED 5 / LOW 다수 → H-1·M-1~M-5·L-1·L-2·L-4~L-6 수정. 리포트: `.claude/_workspace/qa/f6-ai리포트_20261003.md`. 간헐 로그인 401의 원인(테스트 컨텍스트들이 같은 H2 인메모리 DB 공유+create-drop)을 찾아 컨텍스트별 고유 DB로 해결
+- [x] **실MySQL+브라우저 라이브 확인(AI_PROVIDER=mock)**: 생성 202→3초 후 DRAFT, TECHNICIAN 403, 중복 409, 편집→저장→확정, 확정 후 PUT/재확정 409, AI 원본 보존, 악성 마크다운(script/onerror/javascript:/이미지) 제거 확인, ai_call_logs 기록
+
 ### 남음
-- [ ] 3주차: AI 리포트(F-6)
+- [ ] **실 Claude API 호출 검증** (ANTHROPIC_API_KEY 필요, `AI_PROVIDER=claude`): 응답 형식·토큰·지연(60초 내)·effort low 품질 확인. 문제 시 AI_MAX_TOKENS 상향/effort 조정
+- [ ] 3주차 여유분: FR-2.3 임계치 편집 화면, FR-6.5 교대 인수인계 요약(Should)
 - [ ] 4주차: KPI + 테스트 + 배포 + 포트폴리오 README 패키징
 
 ## 5. 다음 작업 지시 (그대로 실행 가능)
 
 ```
-3주차 본작업 남은 것 — F-6 AI 리포트:
-1. aireport/: 컨텍스트 수집(알람+센서1분집계요약+이력5건+BM3건 — 이제 inspection 이력 서비스 인터페이스 사용 가능) → Claude API 호출
-   (백엔드 경유만, docs/11 §7, 키는 env) → DRAFT 저장(비동기 202) → 편집→확정 플로우, 일20건 쿼터+토큰기록 (docs/03 F-6, docs/06 §7)
-2. frontend features/aireport: S-7 리포트뷰/에디터, 설비상세 리포트 탭, 'AI 리포트 생성' 버튼(미해결 알람 있을 때 활성)
-3. 여유 시: FR-2.3 임계치 편집 화면(2주차 이월분, API 완성됨)
+다음: 4주차 — KPI(FR-5.7: MTBF/MTTR/가동률, MTTR 정의는 DOWN 진입~이탈) + 테스트 정리(docs/12 4대 핵심 도메인) + 배포(Railway+Vercel, docs/13) + 포트폴리오 README 패키징.
+   S-1 대시보드 KPI 스트립을 누적 가동률로 교체(2주차 이월분)도 여기서 처리.
+   실 Claude 호출 검증은 API 키 준비되면 먼저 수행 (위 '남음' 참고).
+
+F-6 후속:
+   - 코드 방어 못 한 항목: 복구 5분 기준 vs 큐 최악 대기(약 10분) — 워커 시작 시점에 updated_at 갱신하면 해소. 기동 시 info 로그로 경고만 함
+   - 점검 경로 리포트는 신규부터 alarmId 저장(과거 리포트는 null)
+   - GET /admin/ai-usage(호출 로그 조회) 미구현, 번들 890kB 코드 스플리팅 미적용, ai_call_logs MySQL 실경합 테스트 미검증(H2만)
 
 F-3 이월/후속 (우선순위 순):
    - DOWN 이탈(DOWN→IDLE/RUN) 시 BM 점검이력 연결을 "권장→강제"로 올림 (사용자 결정: F-3 이후 단계 — 이제 착수 가능)
@@ -130,6 +140,7 @@ F-3 이월/후속 (우선순위 순):
 
 | 날짜 | 작업 | 결과/결정 |
 |---|---|---|
+| 2026-10-03 | **3주차 F-6 AI 리포트** (하네스: backend/frontend 병렬 → mes-qa → 수정 2개 병렬 → 라이브 검증) | aireport 도메인(비동기 202, 쿼터, 호출 로그, 키 마스킹, 인젝션 방어, 확정본 불변), S-7+설비 리포트 탭+생성 진입점. 테스트 235→365, 프론트 build/lint 통과. QA에서 HIGH 1(Sonnet 5.5가 thinking 기본 ON이라 max_tokens 2000으론 본문 빈/잘림 위험 — claude-api 스킬로 사양 확인 후 effort low+max_tokens 4096+타임아웃 60초로 수정), MED 5(키 개행 시 로그 노출 경로, 간헐 401=테스트 H2 공유, 확정 레이스, 알람/점검 경로 중복 생성, docs/11 권한표) 수정. 실MySQL+브라우저 라이브 확인은 AI_PROVIDER=mock 기준. **실 Claude 호출은 API 키 없어 미검증**. 리포트: `.claude/_workspace/qa/f6-ai리포트_20261003.md` |
 | 2026-10-02 | **3주차 F-3 점검 이력 + PM 스케줄 + 알람 이력 가시화** (하네스: backend-dev/frontend-dev 병렬 → mes-qa → 라이브 검증·수정) | 점검 이력 CRUD·승인·체크리스트·PM 스케줄·PM 지연 알람(이벤트)·BM→알람 자동 해제, S-4/S-5/점검탭/OVERDUE 배지/알람 해제사유 표시. 테스트 156→235, 프론트 build/lint 통과. QA HIGH 0, MED 2 수정. 실MySQL 라이브 확인 중 PM 등록 후 PM_OVERDUE 알람 잔존 결함 발견→자동 해소로 수정. 이월: BM 연결 강제, 작업자 필터, 템플릿 관리 UI, 시드 PM 스케줄 재설정. 리포트: `.claude/_workspace/qa/f3-점검이력_20261002.md` |
 | 2026-10-02 | **상태 머신 개선(F-2)** (하네스: backend-dev/frontend-dev 병렬 → mes-qa) | DOWN=BM(계획 외 정지) 취급, 라벨 "DOWN (BM)". 신규 DOWN→IDLE(사유 필수, TECHNICIAN 포함 전 역할), DOWN→RUN(사유 필수, ENGINEER+), DOWN→PM 유지, PM→RUN 계속 불가. 권한 판정은 EquipmentService.validateManualChange 한 곳(404→400허용표→403권한→400사유). MTTR 정의 DOWN 진입~이탈로 변경(구현은 4주차). 별도 컬럼 없이 로그의 DOWN→RUN이 시운전 생략 표시. 문서 6종(03/06/11/12/14+memory) 동기화. 테스트 114→156 통과, 프론트 build/lint 통과. QA: HIGH 0 / MED 3(설비수정폼 라벨 누락, docs/11 권한표 stale, 시드가 DOWN→PM 경로) 모두 수정. 실서버 확인: 브라우저 DOWN→IDLE 직행 성공, TECHNICIAN API 403/400/403 확인. 리포트: `.claude/_workspace/qa/f2-상태머신개선_20261002.md`. 실DB는 기존 시드 로그 유지(시드는 빈 DB에서만 실행) |
 | 2026-10-01 | 실MySQL 기동 + 3분 시연 (2주 연속 미룬 항목 해소) | docker MySQL(3307)+bootRun+vite, 브라우저로 DRIFT→경고→임계→자동DOWN, STEP→경고 확인. 실기동에서만 드러난 결함 2종 수정(@Lob tinytext, 포트 충돌). 상태 머신 DOWN→PM 강제 경로가 현장 흐름과 안 맞는다는 지적 → 개선안은 결정 대기 |

@@ -39,7 +39,12 @@ public enum ErrorCode {
     CAUSE_4M_REQUIRED(HttpStatus.BAD_REQUEST, "BM(사후보전) 점검 이력은 4M 원인 분류(cause4m)가 필수입니다."),
 
     // 시뮬레이터 (docs/03 F-4.2, docs/06 §8)
-    SCENARIO_ALREADY_ACTIVE(HttpStatus.CONFLICT, "해당 센서에 동일 유형의 활성 시나리오가 이미 있습니다.");
+    SCENARIO_ALREADY_ACTIVE(HttpStatus.CONFLICT, "해당 센서에 동일 유형의 활성 시나리오가 이미 있습니다."),
+
+    // AI 리포트 (docs/03 F-6.4, docs/06 §7)
+    AI_QUOTA_EXCEEDED(HttpStatus.FORBIDDEN, "오늘의 AI 리포트 생성 한도를 초과했습니다. 내일 다시 시도하거나 수동으로 작성하세요."),
+    ALREADY_GENERATING(HttpStatus.CONFLICT, "이미 AI 리포트를 생성 중입니다."),
+    INVALID_REPORT_STATE(HttpStatus.CONFLICT, "현재 리포트 상태에서는 수행할 수 없는 처리입니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;

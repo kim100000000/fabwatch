@@ -5,17 +5,6 @@ import { StubPage } from './StubPage'
  * 각 화면 구현 시 이 파일에서 꺼내 전용 페이지 파일로 승격한다.
  */
 
-/** S-7 AI 리포트 (/reports) */
-export function ReportListPage() {
-  return (
-    <StubPage
-      screen="S-7"
-      title="AI 리포트"
-      plan="3주차: 리포트 목록/상세/편집 (DRAFT·CONFIRMED 배지, 마크다운 렌더링 — raw HTML 비활성)"
-    />
-  )
-}
-
 /** S-8 관리 (/admin) */
 export function AdminPage() {
   return (

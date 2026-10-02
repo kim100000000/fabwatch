@@ -17,6 +17,12 @@ public interface UserQueryService {
     /** 여러 사용자 이름을 한 번에 조회 (목록 API의 N+1 방지). key = userId */
     Map<Long, String> findNamesByIds(Collection<Long> userIds);
 
+    /**
+     * 여러 사용자의 역할명(ADMIN/ENGINEER/TECHNICIAN)을 한 번에 조회. key = userId.
+     * AI 프롬프트처럼 이름·이메일을 내보내면 안 되는 곳에서 "작업자 역할"만 필요할 때 쓴다.
+     */
+    Map<Long, String> findRolesByIds(Collection<Long> userIds);
+
     /** 존재하는(삭제되지 않은) 사용자 여부 */
     boolean existsById(Long userId);
 }

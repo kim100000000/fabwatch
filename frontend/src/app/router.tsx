@@ -11,6 +11,7 @@ import {
   InspectionListPage,
   LoginPage,
   NotFoundPage,
+  ReportDetailPage,
   ReportListPage,
 } from '@/pages'
 
@@ -40,6 +41,7 @@ export function AppRoutes() {
           <Route path="alarms" element={<AlarmCenterPage />} />
           {/* S-7 AI 리포트 */}
           <Route path="reports" element={<ReportListPage />} />
+          <Route path="reports/:id" element={<ReportDetailPage />} />
           {/* S-8 관리 */}
           <Route path="admin" element={<AdminPage />} />
           <Route path="*" element={<NotFoundPage />} />

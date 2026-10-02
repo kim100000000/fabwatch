@@ -4,7 +4,7 @@ import com.fabwatch.alarm.entity.Alarm;
 import com.fabwatch.auth.entity.Role;
 import com.fabwatch.auth.entity.User;
 import com.fabwatch.auth.repository.UserRepository;
-import com.fabwatch.common.entity.AiReport;
+import com.fabwatch.aireport.entity.AiReport;
 import com.fabwatch.inspection.entity.ChecklistItem;
 import com.fabwatch.inspection.entity.Inspection;
 import com.fabwatch.inspection.entity.InspectionCheckResult;
@@ -485,6 +485,7 @@ public class LocalDataSeeder implements CommandLineRunner {
                 .completionTokens(650)
                 .createdBy(engineer.getId())
                 .confirmedBy(engineer.getId())
+                .confirmedAt(java.time.Instant.now())
                 .build());
         em.flush();
     }

@@ -17,6 +17,7 @@ equipments ─< sensors ─< sensor_data (원본, 7일)
 equipments ─< equipment_status_logs
 equipments ─< pm_schedules
 alarms ─── ai_reports (nullable 연계)
+ai_reports ─< ai_call_logs (호출 이력·쿼터 집계)
 inspections ─── alarms (BM-알람 연계, nullable)
 ```
 
@@ -152,14 +153,32 @@ inspections ─── alarms (BM-알람 연계, nullable)
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
 | equipment_id | FK NN | |
-| alarm_id / inspection_id | FK NULL | 둘 중 하나 이상 |
-| title | VARCHAR(200) NN | |
-| status | ENUM('GENERATING','DRAFT','CONFIRMED','FAILED') NN | |
+| alarm_id / inspection_id | FK NULL | 둘 중 하나 이상(앱 검증, 둘 다 있으면 같은 설비여야 함). 점검만 지정하면 그 점검의 연계 알람(있으면)을 컨텍스트에 포함하고 컬럼 alarm_id에도 그 알람 id를 저장(알람/점검 경로 중복 생성·동시 생성 판정용). 요청에 alarmId가 있으면 요청값 우선 |
+| title | VARCHAR(200) NN | 서버 생성: `고장 리포트 — {설비코드} {발생일시 KST}` |
+| status | ENUM('GENERATING','DRAFT','CONFIRMED','FAILED') NN | 전이 규칙은 docs/03 F-6.3·docs/06 §7 |
 | draft_content | MEDIUMTEXT NULL | AI 원본 (보존, 수정 금지) |
-| final_content | MEDIUMTEXT NULL | 확정본 |
-| fail_reason | VARCHAR(300) NULL | |
-| model / prompt_tokens / completion_tokens | 기록용 | 비용 추적 (NFR-4) |
+| final_content | MEDIUMTEXT NULL | 확정본(편집본). FAILED 상태에서는 수동 작성 용도 |
+| fail_reason | VARCHAR(300) NULL | 정제된 사유 — API 키·응답 원문 저장 금지 |
+| model / prompt_tokens / completion_tokens | 기록용 | 비용 추적 (NFR-4). mock이면 model='mock', 토큰 0 |
 | created_by / confirmed_by | FK users | |
+| confirmed_at | DATETIME NULL | 확정 시각 (3주차 F-6에서 추가) |
+| INDEX (equipment_id, created_at), INDEX (status, updated_at), INDEX (alarm_id), INDEX (inspection_id) | | updated_at 인덱스는 GENERATING 정체 복구용 |
+
+### ai_call_logs (AI 호출 이력 — F-6 구현 시 신설, 2026-10-03 문서 반영)
+일일 쿼터 집계의 단일 출처이자 docs/11 §7 호출 로그. 추가 전용(삭제 경로 없음).
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| report_id | BIGINT NULL | 대상 ai_reports.id (재시도는 같은 report_id로 행이 추가됨) |
+| user_id | BIGINT NULL | 요청자 |
+| requested_at | DATETIME NN | 요청 수락 시각(UTC). 쿼터 집계는 KST 일자 경계 |
+| provider | VARCHAR(10) NN | `claude` / `mock` |
+| model | VARCHAR(50) | 설정 모델명 또는 `mock` |
+| success | BOOLEAN NULL | NULL=진행 중, TRUE/FALSE=완료 |
+| error_summary | VARCHAR(300) NULL | 정제된 실패 사유 |
+| prompt_tokens / completion_tokens | INT NULL | 응답 usage |
+| INDEX (requested_at), INDEX (report_id) | | |
+
+쿼터: `COUNT(*) WHERE requested_at ∈ [오늘 KST 00:00, 내일 00:00)` ≥ `AI_DAILY_QUOTA`이면 403 `AI_QUOTA_EXCEEDED`. 성공/실패/진행 중/mock 모두 1건으로 센다(키 미설정 실패 포함).
 
 ### simulation_scenarios (시뮬레이터 제어)
 | 컬럼 | 타입 | 설명 |

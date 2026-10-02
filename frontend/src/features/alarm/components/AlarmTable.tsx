@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { SeverityBadge } from '@/shared/ui'
 import { formatKst } from '@/shared/lib/datetime'
 import { ALARM_STATUS_LABEL, ALARM_TYPE_LABEL, linkedInspectionId } from '../types'
@@ -17,6 +18,11 @@ interface AlarmTableProps {
   onSelectEquipment?: (equipmentId: number) => void
   /** 해제 사유가 'BM 점검 이력 #id' 인 알람의 점검 이력 이동 링크 (선택) */
   onOpenInspection?: (inspectionId: number) => void
+  /**
+   * 조치 칸에 덧붙일 추가 버튼 (예: 'AI 리포트').
+   * alarm 도메인이 aireport 를 직접 import 하면 순환 의존이 되므로 호출부(page/탭)에서 슬롯으로 주입한다.
+   */
+  renderExtraActions?: (alarm: Alarm) => ReactNode
 }
 
 /** 발생값/기준값 표기 — 둘 다 없으면 '-' */
@@ -67,6 +73,7 @@ export function AlarmTable({
   hideEquipment = false,
   onSelectEquipment,
   onOpenInspection,
+  renderExtraActions,
 }: AlarmTableProps) {
   return (
     <div className="table-scroll">
@@ -152,6 +159,7 @@ export function AlarmTable({
                   >
                     RESOLVE
                   </button>
+                  {renderExtraActions?.(alarm)}
                 </span>
               </td>
             </tr>

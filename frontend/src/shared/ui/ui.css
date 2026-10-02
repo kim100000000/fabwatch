@@ -299,3 +299,9 @@
   align-items: center;
   gap: 10px;
 }
+
+/* ---------- ConfirmDialog ---------- */
+.confirm-message {
+  line-height: 1.6;
+  white-space: pre-line;
+}

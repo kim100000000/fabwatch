@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { useAuth } from '@/app/providers/useAuth'
 import { toApiError } from '@/shared/api'
 import { formatDuration, formatKst } from '@/shared/lib/datetime'
@@ -16,6 +17,11 @@ interface InspectionDetailDialogProps {
   onClose: () => void
   /** 승인/수정 성공 — 부모가 목록을 다시 읽는다 */
   onChanged?: (updated: InspectionDetail, message: string) => void
+  /**
+   * 하단 버튼 영역에 덧붙일 추가 버튼 슬롯 (예: BM 'AI 리포트 생성').
+   * inspection 도메인이 aireport 를 직접 import 하면 순환 의존이 되므로 호출부에서 주입한다.
+   */
+  renderExtraActions?: (inspection: InspectionDetail) => ReactNode
 }
 
 /**
@@ -24,7 +30,12 @@ interface InspectionDetailDialogProps {
  * - [승인]: ENGINEER+ (이미 승인된 건은 숨김)
  * - [수정]: 작성자 본인 또는 ENGINEER+ (서버도 동일하게 403 FORBIDDEN 으로 막는다)
  */
-export function InspectionDetailDialog({ inspectionId, onClose, onChanged }: InspectionDetailDialogProps) {
+export function InspectionDetailDialog({
+  inspectionId,
+  onClose,
+  onChanged,
+  renderExtraActions,
+}: InspectionDetailDialogProps) {
   const { user } = useAuth()
   const { inspection, loading, error, refetch } = useInspectionDetail(inspectionId)
   // 승인/수정 직후에는 응답 본문으로 바로 갱신한다
@@ -64,6 +75,7 @@ export function InspectionDetailDialog({ inspectionId, onClose, onChanged }: Ins
       footer={
         !editing && current ? (
           <>
+            {renderExtraActions?.(current)}
             {canEdit && (
               <button type="button" className="btn" onClick={() => setEditing(true)}>
                 수정

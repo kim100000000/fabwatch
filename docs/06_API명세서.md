@@ -127,16 +127,51 @@ PmScheduleResponse = {
 
 ## 7. AI 리포트 /ai-reports
 
+> 2026-10-03 실제 구현 shape으로 갱신 (F-6). 시각은 ISO-8601 UTC, 목록은 공통 `PageResponse {content,totalElements,totalPages,number}`(page/size, 기본 20, 최신순 고정).
+
 | 메서드 | 경로 | 설명 | 권한 |
 |---|---|---|---|
-| POST | /ai-reports | `{alarmId? 또는 inspectionId?}` → 202 Accepted `{reportId, status:"GENERATING"}` (비동기 생성) | ENGINEER+ |
-| GET | /ai-reports/{id} | 상세. 폴링용 (GENERATING→DRAFT/FAILED) | 전체 |
-| GET | /ai-reports | 목록 (filter: equipmentId, status) | 전체 |
-| PUT | /ai-reports/{id} | `{finalContent}` 수정 저장 (DRAFT만) | ENGINEER+ |
-| PATCH | /ai-reports/{id}/confirm | 확정 | ENGINEER+ |
-| POST | /ai-reports/{id}/retry | FAILED 재시도 | ENGINEER+ |
-| POST | /ai-reports/shift-summary | `{date, shift}` 교대 인수인계 요약 (Should) | ENGINEER+ |
-| 에러 | | 403 `AI_QUOTA_EXCEEDED` / 409 `ALREADY_GENERATING` | |
+| POST | /ai-reports | body `{alarmId?, inspectionId?}` → **202** `{reportId, status:"GENERATING"}` (비동기 생성) | ENGINEER+ (ADMIN 포함) |
+| GET | /ai-reports/{id} | 상세 `AiReportResponse`. 폴링용 (GENERATING→DRAFT/FAILED) | 전체 |
+| GET | /ai-reports | 목록 `PageResponse<AiReportSummary>` (filter: equipmentId, status, alarmId, inspectionId, page, size) | 전체 |
+| PUT | /ai-reports/{id} | `{finalContent}` 수정 저장 — **DRAFT 또는 FAILED**(수동 작성)만 | ENGINEER+ |
+| PATCH | /ai-reports/{id}/confirm | 확정 → CONFIRMED | ENGINEER+ |
+| POST | /ai-reports/{id}/retry | FAILED 재시도 → **202** `{reportId, status:"GENERATING"}` (같은 reportId 재사용) | ENGINEER+ |
+| POST | /ai-reports/shift-summary | `{date, shift}` 교대 인수인계 요약 (Should, 미구현) | ENGINEER+ |
+
+**POST 규칙**
+- alarmId·inspectionId 둘 다 없으면 400 `VALIDATION_ERROR`, 존재하지 않으면 404 `NOT_FOUND`.
+- 둘 다 있으면 둘 다 저장하되 서로 다른 설비면 400 `VALIDATION_ERROR`.
+- 점검만 지정하면 그 점검의 설비 기준으로 컨텍스트를 수집하고, 점검에 연계된 알람(있으면)도 컨텍스트에 포함한다(점검만 지정했는데 그 점검에 연계 알람이 있으면 컬럼 alarm_id에도 그 알람 id를 저장한다 — `?alarmId=` 필터와 409 `ALREADY_GENERATING` 판정이 알람 경로·점검 경로 양쪽에서 같은 사건으로 일치하도록. 요청에 alarmId가 있으면 요청값 우선).
+- `title`은 서버가 생성: `고장 리포트 — {설비코드} {발생일시 KST yyyy-MM-dd HH:mm}` (발생일시 = 알람 발생 시각, 알람이 없으면 점검 시작 시각).
+- 같은 알람/점검에 GENERATING 리포트가 이미 있으면 409 `ALREADY_GENERATING`. 오늘(KST) 호출 시도 수가 `AI_DAILY_QUOTA` 이상이면 403 `AI_QUOTA_EXCEEDED` (생성·재시도 공통, mock 호출도 카운트).
+
+**AiReportResponse** (GET /{id}, PUT, PATCH confirm)
+```json
+{ "id":1, "equipmentId":2, "equipmentCode":"LAMI-01", "equipmentName":"합착기 1호",
+  "alarmId":10, "inspectionId":null, "title":"고장 리포트 — LAMI-01 2026-10-02 23:03",
+  "status":"GENERATING|DRAFT|CONFIRMED|FAILED",
+  "draftContent":"…AI 원본 마크다운…", "finalContent":"…편집/확정본…", "failReason":null,
+  "model":"claude-sonnet-5-5", "promptTokens":1200, "completionTokens":650,
+  "createdBy":3, "createdByName":"…", "confirmedBy":null, "confirmedByName":null,
+  "createdAt":"2026-10-02T14:05:00Z", "confirmedAt":null }
+```
+- GENERATING 중에는 `draftContent`/`finalContent`가 null. mock provider면 `model:"mock"`, 토큰 0, 본문 맨 위에 `> [MOCK] 실제 AI가 생성한 리포트가 아닙니다`.
+- `draftContent`(AI 원본)는 어떤 API로도 수정되지 않는다. 편집은 `finalContent`만.
+
+**AiReportSummary** (목록 행, 본문 제외)
+`{ id, equipmentId, equipmentCode, equipmentName, alarmId, inspectionId, title, status, createdByName, createdAt, confirmedAt }`
+
+**상태 전이 규칙**
+| 동작 | GENERATING | DRAFT | FAILED | CONFIRMED |
+|---|---|---|---|---|
+| PUT (finalContent) | 409 | 200 | 200 (수동 작성) | 409 |
+| PATCH confirm | 409 | 200 (final이 비면 draft를 final로 복사) | 200 (final 있어야 함, 없으면 400 `VALIDATION_ERROR`) | 409 |
+| POST retry | 409 | 409 | 202 | 409 |
+
+위 409는 전부 `INVALID_REPORT_STATE`. CONFIRMED 이후에는 수정·재확정·재시도 불가. PUT의 `finalContent`가 공백이면 400 `VALIDATION_ERROR`.
+
+**에러 코드**: 403 `AI_QUOTA_EXCEEDED` / 409 `ALREADY_GENERATING` / 409 `INVALID_REPORT_STATE` / 400 `VALIDATION_ERROR` / 404 `NOT_FOUND` / 403 `FORBIDDEN`(TECHNICIAN의 POST·PUT·PATCH·retry)
 
 ## 8. 시뮬레이터 /simulator (데모 제어)
 
@@ -159,6 +194,9 @@ param 기본값: DRIFT `{durationMin: 10}` (10분에 crit 도달 기울기 자�
 
 ## 10. 외부 API — Claude (백엔드 내부 호출)
 
-- `POST https://api.anthropic.com/v1/messages`, 모델 `claude-sonnet-*`(비용 균형), `max_tokens: 2000`.
-- 키는 환경변수 `ANTHROPIC_API_KEY`. **프론트에서 직접 호출 절대 금지.**
-- 타임아웃 30s, 재시도 1회(5xx만). 사용량 `ai_reports.prompt_tokens/completion_tokens` 기록.
+- `POST https://api.anthropic.com/v1/messages` (헤더 `x-api-key`, `anthropic-version: 2023-06-01`, `content-type: application/json`), body `{model, max_tokens, output_config:{effort}, system, messages:[{role:"user", content}]}`. `thinking` 필드는 보내지 않는다(생략=adaptive thinking, `effort: "low"`로 사고 토큰 최소화). `temperature`/`top_p`/`top_k`는 보내지 않는다(비기본값은 400). 응답의 `text` 블록을 이어붙이고 `usage.input_tokens/output_tokens`를 기록한다. 모델 기본값 `claude-sonnet-5-5`(`AI_MODEL`), `max_tokens: 4096`(`AI_MAX_TOKENS`, 사고 토큰 포함 상한), `effort: low`(`AI_EFFORT`, low/medium/high).
+- 키는 환경변수 `ANTHROPIC_API_KEY`. **프론트에서 직접 호출 절대 금지.** 키는 로그·에러 메시지·응답·DB(fail_reason)에 노출하지 않는다.
+- `AI_PROVIDER=claude|mock`(기본 claude). 키가 비어 있는 claude는 호출 없이 FAILED(`ANTHROPIC_API_KEY가 설정되지 않았습니다`) — 키가 없다고 자동 mock으로 넘어가지 않는다. mock은 명시 설정했을 때만 동작.
+- 읽기 타임아웃 60s(`AI_TIMEOUT_SECONDS`, connect 10s). 타임아웃/5xx는 1회 재시도, 429는 재시도 없이 FAILED(사유 "잠시 후 다시 시도해 주세요"), 그 외 4xx(401/400 등)도 재시도 없이 FAILED(정제된 사유). 사용량은 `ai_reports.prompt_tokens/completion_tokens` + `ai_call_logs`에 기록. 본문이 비거나 잘린 경우는 고정 코드로 구분한다: `max_tokens`로 text가 비면 FAILED `[MAX_TOKENS_TRUNCATED] ...`, 그 외 빈 본문은 FAILED `[EMPTY_CONTENT] ...`(fail_reason·`ai_call_logs.error_summary` 동일), 본문이 일부 있고 `max_tokens`로 잘렸으면 DRAFT(잘림 안내 문구 부착) + `ai_call_logs.error_summary="[MAX_TOKENS_TRUNCATED] ..."`(success=true).
+- API 키는 앞뒤 공백을 제거하고 내부에 개행·공백·제어문자가 있으면 "미설정/유효하지 않음"으로 취급해 호출하지 않는다(`NOT_CONFIGURED`). 호출 중 예외는 키·원문 없는 고정 문구로만 변환하고, 생성 워커의 서버 로그에도 예외 객체/메시지 대신 클래스명+reportId만 남긴다.
+- 구현 위치: `com.fabwatch.aireport` (`ClaudeClient` 인터페이스 + `AnthropicHttpClaudeClient`(Spring RestClient)). 별도 SDK 의존성 없음.

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/app/providers/useAuth'
+import { EquipmentReportCreateButton } from '@/features/aireport'
 import {
   EquipmentDetailTabs,
   EquipmentFormDialog,
@@ -78,10 +79,8 @@ export function EquipmentDetailPage() {
                   수정
                 </button>
               )}
-              {/* AI 리포트 생성은 aireport 도메인 구현 라운드에 활성화 */}
-              <button type="button" className="btn" disabled>
-                AI 리포트 생성
-              </button>
+              {/* ENGINEER+ 만 노출, 미해결 알람이 없으면 비활성 */}
+              <EquipmentReportCreateButton equipmentId={equipment.id} />
             </div>
           </div>
 
