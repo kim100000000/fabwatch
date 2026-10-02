@@ -1,6 +1,6 @@
 import { SeverityBadge } from '@/shared/ui'
 import { formatKst } from '@/shared/lib/datetime'
-import { ALARM_STATUS_LABEL, ALARM_TYPE_LABEL } from '../types'
+import { ALARM_STATUS_LABEL, ALARM_TYPE_LABEL, linkedInspectionId } from '../types'
 import type { Alarm } from '../types'
 import './alarm.css'
 
@@ -15,6 +15,8 @@ interface AlarmTableProps {
   /** 설비가 고정된 화면(S-3 알람 탭)에서는 설비 컬럼을 숨긴다 */
   hideEquipment?: boolean
   onSelectEquipment?: (equipmentId: number) => void
+  /** 해제 사유가 'BM 점검 이력 #id' 인 알람의 점검 이력 이동 링크 (선택) */
+  onOpenInspection?: (inspectionId: number) => void
 }
 
 /** 발생값/기준값 표기 — 둘 다 없으면 '-' */
@@ -24,6 +26,33 @@ function formatTrigger(alarm: Alarm): string {
     return `${alarm.triggerValue}`
   }
   return `${alarm.triggerValue} / ${alarm.thresholdValue}`
+}
+
+/** 해제(RESOLVED) 알람의 해제 사유 · 처리자 · 처리 시각 (KST) */
+function ResolveInfo({
+  alarm,
+  onOpenInspection,
+}: {
+  alarm: Alarm
+  onOpenInspection?: (inspectionId: number) => void
+}) {
+  const inspectionId = linkedInspectionId(alarm.resolveNote)
+  return (
+    <div className="alarm-resolve-info">
+      <span className="alarm-resolve-note">해제 사유: {alarm.resolveNote || '(사유 없음)'}</span>
+      <span className="alarm-resolve-meta">
+        {alarm.resolvedByName ?? '-'} · <span className="mono">{formatKst(alarm.resolvedAt)}</span>
+        {inspectionId !== null && onOpenInspection && (
+          <>
+            {' · '}
+            <button type="button" className="inline-link" onClick={() => onOpenInspection(inspectionId)}>
+              점검 이력 #{inspectionId} 보기
+            </button>
+          </>
+        )}
+      </span>
+    </div>
+  )
 }
 
 /**
@@ -37,6 +66,7 @@ export function AlarmTable({
   busyAlarmId = null,
   hideEquipment = false,
   onSelectEquipment,
+  onOpenInspection,
 }: AlarmTableProps) {
   return (
     <div className="table-scroll">
@@ -85,7 +115,12 @@ export function AlarmTable({
               <td>
                 <SeverityBadge severity={alarm.severity} />
               </td>
-              <td className="alarm-message">{alarm.message}</td>
+              <td className="alarm-message">
+                {alarm.message}
+                {alarm.status === 'RESOLVED' && (
+                  <ResolveInfo alarm={alarm} onOpenInspection={onOpenInspection} />
+                )}
+              </td>
               <td className="mono">{formatTrigger(alarm)}</td>
               <td>
                 <span className="alarm-status" data-status={alarm.status}>

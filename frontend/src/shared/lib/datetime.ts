@@ -91,6 +91,32 @@ export function currentShift(value: string | Date = new Date()): Shift {
   return hour >= 8 && hour < 20 ? 'D' : 'N'
 }
 
+/**
+ * datetime-local 입력값('YYYY-MM-DDTHH:mm', KST 기준)을 UTC ISO 로 변환한다.
+ * 화면 입력은 KST, 서버 전달은 UTC (CLAUDE.md 시각 규칙). 해석 불가면 null.
+ */
+export function kstLocalToUtcIso(local: string): string | null {
+  if (!local) return null
+  const date = new Date(`${local}:00+09:00`)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
+/** UTC 시각(ISO/Date)을 datetime-local 입력값('YYYY-MM-DDTHH:mm', KST)으로 변환 */
+export function toKstLocalInput(value: string | Date | number | null | undefined): string {
+  const date = typeof value === 'number' ? new Date(value) : toDate(value)
+  return date ? DATETIME_FORMATTER.format(date).replace(' ', 'T') : ''
+}
+
+/** 소요시간(분) → 'N시간 M분' (60분 미만은 'M분') */
+export function formatDuration(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined || Number.isNaN(minutes)) return '-'
+  const total = Math.max(0, Math.round(minutes))
+  const hours = Math.floor(total / 60)
+  const rest = total % 60
+  if (hours === 0) return `${rest}분`
+  return rest === 0 ? `${hours}시간` : `${hours}시간 ${rest}분`
+}
+
 function toDate(value: string | Date | null | undefined): Date | null {
   if (!value) return null
   const date = value instanceof Date ? value : new Date(value)

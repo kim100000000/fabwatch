@@ -157,3 +157,12 @@ export function compareAlarms(a: Alarm, b: Alarm): number {
   if (byStatus !== 0) return byStatus
   return new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()
 }
+
+/**
+ * 해제 사유가 'BM 점검 이력 #123 …' 으로 시작하면 연계된 점검 이력 id 를 돌려준다.
+ * BM 점검 이력 저장 시 서버가 연계 알람을 이 형식의 사유로 RESOLVED 처리한다 (F-3).
+ */
+export function linkedInspectionId(resolveNote: string | null | undefined): number | null {
+  const match = resolveNote?.match(/^BM 점검 이력 #(\d+)/)
+  return match ? Number(match[1]) : null
+}

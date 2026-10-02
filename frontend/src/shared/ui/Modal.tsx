@@ -8,10 +8,12 @@ interface ModalProps {
   children: ReactNode
   /** 하단 버튼 영역 */
   footer?: ReactNode
+  /** 폼·표가 들어가는 넓은 모달 */
+  wide?: boolean
 }
 
 /** 공통 모달 — 오버레이 클릭/ESC 로 닫힌다 (docs/04 §4 담백한 다크 카드) */
-export function Modal({ title, onClose, children, footer }: ModalProps) {
+export function Modal({ title, onClose, children, footer, wide = false }: ModalProps) {
   // ESC 로 닫기. 열려 있는 동안 배경 스크롤 잠금.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -29,7 +31,7 @@ export function Modal({ title, onClose, children, footer }: ModalProps) {
   return (
     <div className="modal-overlay" onClick={onClose} role="presentation">
       <div
-        className="modal-card"
+        className={wide ? 'modal-card modal-wide' : 'modal-card'}
         role="dialog"
         aria-modal="true"
         aria-label={title}

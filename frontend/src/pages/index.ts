@@ -4,9 +4,6 @@ export { EquipmentListPage } from './EquipmentListPage'
 export { EquipmentDetailPage } from './EquipmentDetailPage'
 export { AlarmCenterPage } from './AlarmCenterPage'
 export { NotFoundPage } from './NotFoundPage'
-export {
-  InspectionListPage,
-  InspectionCreatePage,
-  ReportListPage,
-  AdminPage,
-} from './stubs'
+export { InspectionListPage } from './InspectionListPage'
+export { InspectionCreatePage } from './InspectionCreatePage'
+export { ReportListPage, AdminPage } from './stubs'

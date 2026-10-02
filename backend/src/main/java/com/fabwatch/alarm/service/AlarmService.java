@@ -10,6 +10,7 @@ import com.fabwatch.auth.service.UserQueryService;
 import com.fabwatch.common.dto.PageResponse;
 import com.fabwatch.common.event.AlarmRaisedEvent;
 import com.fabwatch.common.event.EquipmentDownRequestedEvent;
+import com.fabwatch.common.event.PmOverdueEvent;
 import com.fabwatch.common.event.SensorLevel;
 import com.fabwatch.common.event.ThresholdExceededEvent;
 import com.fabwatch.common.exception.BusinessException;
@@ -43,7 +44,7 @@ import java.util.stream.Stream;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class AlarmService {
+public class AlarmService implements AlarmCommandService {
 
     private final AlarmRepository alarmRepository;
     private final EquipmentQueryService equipmentQueryService;
@@ -81,6 +82,80 @@ public class AlarmService {
                 .build(), event.sensorType());
     }
 
+    /**
+     * PM 지연 → MAJOR 알람 생성 (docs/03 F-3.3). inspection 스케줄러가 발행한 PmOverdueEvent를 구독한다.
+     * 메시지 형식은 시드 알람과 동일: "LAMI-02 PM 예정일 경과 (3일)".
+     * 같은 설비의 미해결 PM_OVERDUE 알람이 이미 있으면 중복 생성하지 않는다(raise의 유형별 중복 억제).
+     */
+    @EventListener
+    @Transactional
+    public void onPmOverdue(PmOverdueEvent event) {
+        String message = "%s PM 예정일 경과 (%d일)".formatted(
+                equipmentQueryService.findCodeById(event.equipmentId()).orElse("설비#" + event.equipmentId()),
+                event.overdueDays());
+        raise(Alarm.builder()
+                .equipmentId(event.equipmentId())
+                .sensorId(null)
+                .alarmType(Alarm.Type.PM_OVERDUE)
+                .severity(Alarm.Severity.MAJOR)
+                .status(Alarm.Status.OPEN)
+                .message(message)
+                .occurredAt(event.detectedAt())
+                .build(), null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void assertBelongsToEquipment(Long alarmId, Long equipmentId) {
+        Alarm alarm = findAlarm(alarmId);
+        if (!alarm.getEquipmentId().equals(equipmentId)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "연계할 알람이 해당 설비의 알람이 아닙니다: alarmId=" + alarmId);
+        }
+    }
+
+    /** 호출 측(inspection) 트랜잭션에 참여한다 — 점검 이력 저장과 알람 해제가 함께 커밋/롤백된다. */
+    @Override
+    @Transactional
+    public boolean ackAndResolve(Long alarmId, Long actorUserId, String resolveNote) {
+        boolean resolved = ackAndResolve(findAlarm(alarmId), actorUserId, resolveNote);
+        if (resolved) {
+            log.info("알람 해제(BM 점검 연계): id={}, by={}", alarmId, actorUserId);
+        }
+        return resolved;
+    }
+
+    /**
+     * PM 점검 이력 연계 해소 — 설비의 미해결 PM_OVERDUE 알람을 전부 ackAndResolve 규칙으로 닫는다.
+     * 호출 측(inspection) 트랜잭션에 참여하므로 해소 중 예외가 나면 점검 이력·스케줄 갱신까지 함께 롤백된다.
+     */
+    @Override
+    @Transactional
+    public int resolvePmOverdueByEquipment(Long equipmentId, Long actorUserId, String resolveNote) {
+        int resolved = 0;
+        for (Alarm alarm : alarmRepository.findByEquipmentIdAndAlarmTypeAndStatusNot(
+                equipmentId, Alarm.Type.PM_OVERDUE, Alarm.Status.RESOLVED)) {
+            if (ackAndResolve(alarm, actorUserId, resolveNote)) {
+                resolved++;
+                log.info("알람 해제(PM 점검 연계): id={}, equipmentId={}, by={}", alarm.getId(), equipmentId, actorUserId);
+            }
+        }
+        return resolved;
+    }
+
+    /** OPEN→ACK→RESOLVED 흐름을 지키는 공통 전이. 이미 RESOLVED면 건드리지 않고 false. */
+    private boolean ackAndResolve(Alarm alarm, Long actorUserId, String resolveNote) {
+        if (alarm.getStatus() == Alarm.Status.RESOLVED) {
+            return false;
+        }
+        Instant now = Instant.now();
+        if (alarm.getStatus() == Alarm.Status.OPEN) {
+            alarm.acknowledge(actorUserId, now);
+        }
+        alarm.resolve(actorUserId, resolveNote, now);
+        return true;
+    }
+
     /** POST /alarms/manual — 수동 고장 보고 (docs/06 §6). */
     @Transactional
     public AlarmResponse createManual(ManualAlarmRequest request, Long actorUserId) {
@@ -114,7 +189,7 @@ public class AlarmService {
      * @return 생성된 알람. 중복 억제로 생성하지 않았으면 null.
      */
     private Alarm raise(Alarm candidate, String sensorType) {
-        if (isSuppressed(candidate.getEquipmentId(), candidate.getSensorId(), candidate.getSeverity())) {
+        if (isSuppressed(candidate)) {
             log.debug("알람 중복 억제: equipmentId={}, sensorId={}, severity={}",
                     candidate.getEquipmentId(), candidate.getSensorId(), candidate.getSeverity());
             return null;
@@ -136,6 +211,18 @@ public class AlarmService {
                     "CRITICAL 알람 자동 DOWN — " + saved.getMessage(), saved.getOccurredAt()));
         }
         return saved;
+    }
+
+    /**
+     * PM 지연 알람은 설비당 미해결 1건이면 충분하다 — 시스템 알람(sensor_id NULL) 공통 억제는
+     * 수동 MAJOR 보고와 서로를 가리므로, 유형(PM_OVERDUE)까지 포함해 판정한다.
+     */
+    private boolean isSuppressed(Alarm candidate) {
+        if (candidate.getAlarmType() == Alarm.Type.PM_OVERDUE) {
+            return alarmRepository.existsByEquipmentIdAndAlarmTypeAndStatusNot(
+                    candidate.getEquipmentId(), Alarm.Type.PM_OVERDUE, Alarm.Status.RESOLVED);
+        }
+        return isSuppressed(candidate.getEquipmentId(), candidate.getSensorId(), candidate.getSeverity());
     }
 
     /**

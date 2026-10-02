@@ -54,6 +54,33 @@
   min-width: 220px;
 }
 
+.alarm-resolve-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  padding-left: 8px;
+  border-left: 2px solid var(--status-run);
+  font-size: 12px;
+}
+
+.alarm-resolve-note {
+  color: var(--text-primary);
+}
+
+.alarm-resolve-meta {
+  color: var(--text-secondary);
+}
+
+.alarm-table .inline-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--accent);
+  font-size: inherit;
+  text-decoration: underline;
+}
+
 .alarm-table .row-actions {
   display: inline-flex;
   gap: 6px;

@@ -7,6 +7,7 @@ import { AlarmStreamList, alarmFromEvent, compareAlarms, useAlarmList } from '@/
 import type { Alarm, AlarmEventPayload } from '@/features/alarm'
 import { EquipmentLiveCard, useLatestSensors, useSensorStream } from '@/features/sensor'
 import type { EquipmentStatusEventPayload, SensorEventPayload } from '@/features/sensor'
+import { useOverdueEquipmentIds } from '@/features/inspection'
 import { DemoControlPanel } from '@/features/simulator'
 import { statusLabel } from '@/shared/lib/equipmentStatus'
 import { ErrorState, LoadingBlock, StreamStatusBadge } from '@/shared/ui'
@@ -40,14 +41,17 @@ export function DashboardPage() {
   // SSE status 이벤트로 갱신된 설비 상태 (서버 재조회 전까지의 오버레이)
   const [statusOverride, setStatusOverride] = useState<Record<number, EquipmentStatus>>({})
 
+  // PM OVERDUE 설비 (GET /pm-schedules?overdueOnly=true, 1분 주기 별도 쿼리 — SSE/폴링과 독립)
+  const overdueEquipmentIds = useOverdueEquipmentIds()
+
   const mergedEquipments = useMemo(
     (): EquipmentSummary[] =>
-      equipments.map((equipment) =>
-        statusOverride[equipment.id]
-          ? { ...equipment, status: statusOverride[equipment.id] }
-          : equipment,
-      ),
-    [equipments, statusOverride],
+      equipments.map((equipment) => ({
+        ...equipment,
+        status: statusOverride[equipment.id] ?? equipment.status,
+        pmOverdue: equipment.pmOverdue || overdueEquipmentIds.has(equipment.id),
+      })),
+    [equipments, statusOverride, overdueEquipmentIds],
   )
 
   const equipmentIds = useMemo(() => equipments.map((item) => item.id), [equipments])

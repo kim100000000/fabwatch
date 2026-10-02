@@ -196,6 +196,10 @@
   background: var(--bg-card);
 }
 
+.modal-card.modal-wide {
+  max-width: 780px;
+}
+
 .modal-head {
   display: flex;
   align-items: center;
@@ -277,4 +281,21 @@
 
 .table-scroll {
   overflow-x: auto;
+}
+
+/* ---------- Pagination ---------- */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 2px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.pagination-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }

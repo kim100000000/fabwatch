@@ -19,4 +19,10 @@ public interface EquipmentQueryService {
 
     /** 여러 설비 코드를 한 번에 조회 (목록 API의 N+1 방지). key = equipmentId */
     Map<Long, String> findCodesByIds(Collection<Long> equipmentIds);
+
+    /** 설비 이름 (예: "합착기 1호"). 없거나 삭제된 설비면 empty. */
+    Optional<String> findNameById(Long equipmentId);
+
+    /** 여러 설비 이름을 한 번에 조회 (목록 API의 N+1 방지). key = equipmentId */
+    Map<Long, String> findNamesByIds(Collection<Long> equipmentIds);
 }

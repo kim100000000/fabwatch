@@ -61,8 +61,8 @@ export function EquipmentLiveCard({
         <span className="live-alarm-count" data-zero={openAlarmCount === 0}>
           ⚠ 미조치 {openAlarmCount}
         </span>
-        {/* PM 지연 배지 — 백엔드가 pmOverdue 를 내려줄 때만 표시 (docs/04 §3 S-1) */}
-        {equipment.pmOverdue && <span className="pm-overdue-badge">PM 지연</span>}
+        {/* PM OVERDUE 배지 — 대시보드가 GET /pm-schedules?overdueOnly=true 결과를 pmOverdue 로 합쳐 내려준다 (docs/04 §3 S-1) */}
+        {equipment.pmOverdue && <span className="pm-overdue-badge">PM OVERDUE</span>}
       </div>
     </button>
   )

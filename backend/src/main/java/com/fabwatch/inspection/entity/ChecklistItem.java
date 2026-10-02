@@ -1,5 +1,6 @@
-package com.fabwatch.common.entity;
+package com.fabwatch.inspection.entity;
 
+import com.fabwatch.common.entity.SoftDeletableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
@@ -12,7 +13,6 @@ import org.hibernate.annotations.SQLRestriction;
 
 /**
  * PM 체크리스트 템플릿 항목 (docs/05 checklist_items, docs/03 F-3.2).
- * TODO: 다음 라운드에 com.fabwatch.inspection.entity 패키지로 이동 예정.
  */
 @Entity
 @Table(name = "checklist_items")
@@ -44,6 +44,16 @@ public class ChecklistItem extends SoftDeletableEntity {
         this.itemName = itemName;
         this.criteria = criteria;
         this.seq = seq;
+        this.active = active;
+    }
+
+    /** 템플릿 항목 수정. 삭제는 active=false (물리 삭제 금지). seq가 null이면 기존 순서 유지. */
+    public void update(String itemName, String criteria, Integer seq, boolean active) {
+        this.itemName = itemName;
+        this.criteria = criteria;
+        if (seq != null) {
+            this.seq = seq;
+        }
         this.active = active;
     }
 }

@@ -87,26 +87,35 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 - [ ] S-1 KPI 스트립이 문서 스펙(누적 가동률)이 아니라 현재 상태 스냅샷으로 구현됨 — 누적 KPI는 4주차 FR-5.7과 함께 처리
 - [x] 2026-10-01: 실MySQL 기동 + 시연 완료 (DRIFT: 경고→임계→자동DOWN 확인, STEP: 경고 알람 확인). 실기동 중 발견·수정: `@Lob` 컬럼 length 미지정 시 tinytext 생성(AiReport/Inspection), MySQL 호스트 포트 3306→3307(docker-compose/.env.example)
 
+### 3주차 F-3 점검 이력 완료 — 2026-10-02
+- [x] **백엔드**: inspection 도메인 신규(엔티티 4개 common/entity→inspection/ 이동), 점검 이력 등록/조회/수정/승인, PM 체크리스트 조회·관리 API, PM 스케줄(주기 설정, PmScheduleCalculator 순수함수, 매시 :10 UTC 스케줄러가 3일 초과 시 PmOverdueEvent → alarm이 MAJOR 'PM_OVERDUE' 생성), BM+alarmId → alarm 인터페이스(AlarmCommandService)로 자동 ACK+RESOLVE(작성자 명의). BM 등록은 설비 상태를 자동 변경하지 않음. 테스트 156→235 통과
+- [x] **프론트**: S-4 목록/검색(필터 6종+페이징+상세모달+승인/수정), S-5 등록(PM 체크리스트 OK/NG/NA, BM 4M+연계알람, 소요시간·교대 자동), BM 저장 후 DOWN이면 IDLE 전환 확인 다이얼로그(자동 전환 금지), 설비상세 점검 탭+PM 스케줄 카드, 대시보드 PM OVERDUE 배지, 알람 센터 해제 사유·처리자·처리시각 표시(조치한 알람 이력 가시화)
+- [x] **QA**: 경계면 검증 HIGH 0 / MED 2(PM 체크리스트 로딩 중 제출 우회, PM 지연 롤백 통합테스트 부재) 수정, 실MySQL 라이브 확인(BM+알람 자동해제·설비 DOWN 유지, PM 등록→스케줄 갱신, 스케줄러가 PM_OVERDUE 알람 5건 생성). 리포트: `.claude/_workspace/qa/f3-점검이력_20261002.md`
+- [x] **라이브에서 발견·수정**: PM 등록해도 기존 OPEN PM_OVERDUE 알람이 남던 결함 → PM 등록 시 같은 설비의 미해결 PM_OVERDUE 알람 자동 해소 (스케줄 갱신 시에만)
+
 ### 남음
-- [ ] 3주차: 점검 이력(F-3) + AI 리포트(F-6)
+- [ ] 3주차: AI 리포트(F-6)
 - [ ] 4주차: KPI + 테스트 + 배포 + 포트폴리오 README 패키징
 
 ## 5. 다음 작업 지시 (그대로 실행 가능)
 
 ```
-3주차 F-3 구현 시 함께 처리 (상태 머신 개선 2026-10-02 후속):
-   - DOWN 이탈(DOWN→IDLE/RUN) 시 BM 점검이력 연결을 "권장→강제"로 올리는 건 F-3 이후 단계 (사용자 결정). 지금은 사유만 필수.
-   - 알람 센터에서 해제 사유(조치 내용) 표시 여부 확인 필요 (상태 필터로 해제 알람 조회는 가능).
-   - 시뮬레이터 DRIFT는 상한이 없어 시나리오를 안 끄면 값이 무한 상승(실측: 수 시간 뒤 온도 1721℃). crit 도달 후 클램프 또는 자동 해제 고려.
-   - QA LOW 잔여: DOWN→IDLE이 역할값을 보지 않음(알려진 3역할 선결조건 권장, EquipmentService.validateManualChange), 판정순서(403→400) 테스트·null/미지 역할 테스트 없음, POST /alarms/manual로 TECHNICIAN이 CRITICAL을 올리면 autoDown 발생(기존 설계, docs/03에 명시 권장).
+3주차 본작업 남은 것 — F-6 AI 리포트:
+1. aireport/: 컨텍스트 수집(알람+센서1분집계요약+이력5건+BM3건 — 이제 inspection 이력 서비스 인터페이스 사용 가능) → Claude API 호출
+   (백엔드 경유만, docs/11 §7, 키는 env) → DRAFT 저장(비동기 202) → 편집→확정 플로우, 일20건 쿼터+토큰기록 (docs/03 F-6, docs/06 §7)
+2. frontend features/aireport: S-7 리포트뷰/에디터, 설비상세 리포트 탭, 'AI 리포트 생성' 버튼(미해결 알람 있을 때 활성)
+3. 여유 시: FR-2.3 임계치 편집 화면(2주차 이월분, API 완성됨)
 
-3주차 본작업 (F-3 점검이력 + F-6 AI리포트):
-1. inspection/: 점검 이력 등록(PM체크리스트/BM 4M분류), PM스케줄(주기설정→next_due_at계산,
-   OVERDUE 경고, 3일초과 MAJOR알람 — alarm 도메인과는 이벤트로 연결), 검색/필터+페이징 (docs/03 F-3)
-2. aireport/: 컨텍스트 수집(알람+센서1분집계요약+이력5건+BM3건) → Claude API 호출(백엔드 경유만,
-   docs/11 §7) → DRAFT 저장(비동기 202) → 편집→확정 플로우, 일20건 쿼터+토큰기록 (docs/03 F-6, docs/06 §7)
-3. frontend features/{inspection,aireport}: S-5 점검등록폼(PM/BM분기), S-4 이력목록, S-7 리포트뷰/에디터
-참고: FR-2.3 임계치 편집 화면(2주차 이월분)도 여유 있으면 이번에 같이 붙이기 — API는 이미 완성돼있음.
+F-3 이월/후속 (우선순위 순):
+   - DOWN 이탈(DOWN→IDLE/RUN) 시 BM 점검이력 연결을 "권장→강제"로 올림 (사용자 결정: F-3 이후 단계 — 이제 착수 가능)
+   - 점검 이력 작업자 필터: 일반 역할이 쓸 사용자 목록 API가 없어 '내 점검만'으로 대체함. 필요하면 사용자 목록(이름만) 조회 API 추가
+   - PM 체크리스트 템플릿 관리 UI 없음(API만 있음, ENGINEER+). 시드 템플릿으로 동작
+   - 시드 PM 스케줄이 8월 기준이라 5대 전부 OVERDUE(실DB는 시드 건너뜀). 데모 전에 스케줄 재설정 또는 DB 시드 재생성 필요
+   - 시뮬레이터 DRIFT는 상한이 없어 시나리오를 안 끄면 값이 무한 상승(실측: 수 시간 뒤 온도 1721℃). crit 도달 후 클램프 또는 자동 해제 고려
+   - 서버 재시작마다 JWT 시크릿이 바뀌어 로그인이 풀림(JWT_SECRET 미설정). .env에 고정값 두면 개발 편의 개선
+   - QA LOW 잔여: DOWN→IDLE이 역할값을 보지 않음(알려진 3역할 선결조건 권장, EquipmentService.validateManualChange), 판정순서(403→400)·null/미지 역할 테스트 없음,
+     POST /alarms/manual로 TECHNICIAN이 CRITICAL을 올리면 autoDown 발생(기존 설계, docs/03 명시 권장), PM 이력 수정 시 endedAt 변경이 스케줄에 미반영,
+     한 스케줄 실패가 PM 지연 배치 전체 롤백, PM 스케줄 최초 설정 동시요청 UNIQUE 위반 500, ?id= 딥링크 마운트 1회만 반영, 서버 null 가능 필드를 프론트가 non-null로 선언
 ```
 
 ## 6. 주의사항 (매 작업 공통)
@@ -121,6 +130,7 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 
 | 날짜 | 작업 | 결과/결정 |
 |---|---|---|
+| 2026-10-02 | **3주차 F-3 점검 이력 + PM 스케줄 + 알람 이력 가시화** (하네스: backend-dev/frontend-dev 병렬 → mes-qa → 라이브 검증·수정) | 점검 이력 CRUD·승인·체크리스트·PM 스케줄·PM 지연 알람(이벤트)·BM→알람 자동 해제, S-4/S-5/점검탭/OVERDUE 배지/알람 해제사유 표시. 테스트 156→235, 프론트 build/lint 통과. QA HIGH 0, MED 2 수정. 실MySQL 라이브 확인 중 PM 등록 후 PM_OVERDUE 알람 잔존 결함 발견→자동 해소로 수정. 이월: BM 연결 강제, 작업자 필터, 템플릿 관리 UI, 시드 PM 스케줄 재설정. 리포트: `.claude/_workspace/qa/f3-점검이력_20261002.md` |
 | 2026-10-02 | **상태 머신 개선(F-2)** (하네스: backend-dev/frontend-dev 병렬 → mes-qa) | DOWN=BM(계획 외 정지) 취급, 라벨 "DOWN (BM)". 신규 DOWN→IDLE(사유 필수, TECHNICIAN 포함 전 역할), DOWN→RUN(사유 필수, ENGINEER+), DOWN→PM 유지, PM→RUN 계속 불가. 권한 판정은 EquipmentService.validateManualChange 한 곳(404→400허용표→403권한→400사유). MTTR 정의 DOWN 진입~이탈로 변경(구현은 4주차). 별도 컬럼 없이 로그의 DOWN→RUN이 시운전 생략 표시. 문서 6종(03/06/11/12/14+memory) 동기화. 테스트 114→156 통과, 프론트 build/lint 통과. QA: HIGH 0 / MED 3(설비수정폼 라벨 누락, docs/11 권한표 stale, 시드가 DOWN→PM 경로) 모두 수정. 실서버 확인: 브라우저 DOWN→IDLE 직행 성공, TECHNICIAN API 403/400/403 확인. 리포트: `.claude/_workspace/qa/f2-상태머신개선_20261002.md`. 실DB는 기존 시드 로그 유지(시드는 빈 DB에서만 실행) |
 | 2026-10-01 | 실MySQL 기동 + 3분 시연 (2주 연속 미룬 항목 해소) | docker MySQL(3307)+bootRun+vite, 브라우저로 DRIFT→경고→임계→자동DOWN, STEP→경고 확인. 실기동에서만 드러난 결함 2종 수정(@Lob tinytext, 포트 충돌). 상태 머신 DOWN→PM 강제 경로가 현장 흐름과 안 맞는다는 지적 → 개선안은 결정 대기 |
 | 2026-08-10 | **2주차 완료** (하네스 3-agent: backend-dev/frontend-dev/mes-qa) | 시뮬레이터(F-4)+SSE(sensor/alarm/status 3종)+알람(임계치판정+중복억제+CRITICAL자동DOWN)+임계치API(FR-2.3 이월분) 백엔드, 대시보드(S-1)+센서탭(S-3)+알람센터(S-6) 프론트(Playwright 실측검증 포함). QA에서 실결함 3건 발견·수정(에러코드 미매핑으로 DB컬럼명 노출, 미해결알람 0으로 오도표시, 존재안하는 클래스 언급하는 허위 보안주석). QA가 이번엔 "리포트 먼저 저장" 순서를 지켜서 중단 리스크 없이 완료. docs/05·06 드리프트 3건 리더가 직접 동기화. 미완료: 임계치 편집화면(UI), 실MySQL 3분시연(2주 연속 미룸 — 3주차 착수 전 필수) |

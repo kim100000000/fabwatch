@@ -35,6 +35,9 @@ public enum ErrorCode {
     ACK_REQUIRED_FIRST(HttpStatus.BAD_REQUEST, "확인(ACK) 처리 후에만 해제할 수 있습니다."),
     INVALID_ALARM_STATUS(HttpStatus.BAD_REQUEST, "현재 알람 상태에서는 수행할 수 없는 처리입니다."),
 
+    // 점검 이력 (docs/03 F-3.1, docs/06 §4)
+    CAUSE_4M_REQUIRED(HttpStatus.BAD_REQUEST, "BM(사후보전) 점검 이력은 4M 원인 분류(cause4m)가 필수입니다."),
+
     // 시뮬레이터 (docs/03 F-4.2, docs/06 §8)
     SCENARIO_ALREADY_ACTIVE(HttpStatus.CONFLICT, "해당 센서에 동일 유형의 활성 시나리오가 이미 있습니다.");
 

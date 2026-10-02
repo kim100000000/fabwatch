@@ -39,4 +39,20 @@ public class EquipmentQueryServiceImpl implements EquipmentQueryService {
         return equipmentRepository.findAllById(distinct).stream()
                 .collect(Collectors.toMap(Equipment::getId, Equipment::getCode));
     }
+
+    @Override
+    public Optional<String> findNameById(Long equipmentId) {
+        return equipmentId == null ? Optional.empty()
+                : equipmentRepository.findById(equipmentId).map(Equipment::getName);
+    }
+
+    @Override
+    public Map<Long, String> findNamesByIds(Collection<Long> equipmentIds) {
+        if (equipmentIds == null || equipmentIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> distinct = equipmentIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        return equipmentRepository.findAllById(distinct).stream()
+                .collect(Collectors.toMap(Equipment::getId, Equipment::getName));
+    }
 }

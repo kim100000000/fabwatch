@@ -178,6 +178,7 @@ export function AlarmCenterPage() {
           onAck={(alarm) => void handleAck(alarm)}
           onResolveRequest={setResolveTarget}
           onSelectEquipment={(equipmentId) => navigate(`/equipment/${equipmentId}`)}
+          onOpenInspection={(inspectionId) => navigate(`/inspections?id=${inspectionId}`)}
         />
       )}
 

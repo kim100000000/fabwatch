@@ -5,28 +5,6 @@ import { StubPage } from './StubPage'
  * 각 화면 구현 시 이 파일에서 꺼내 전용 페이지 파일로 승격한다.
  */
 
-/** S-4 점검 이력 목록/검색 (/inspections) */
-export function InspectionListPage() {
-  return (
-    <StubPage
-      screen="S-4"
-      title="점검 이력"
-      plan="3주차: 점검 이력 목록/검색 (filter: 설비·유형·교대·작업자·NG 여부·기간)"
-    />
-  )
-}
-
-/** S-5 점검 이력 등록 (/inspections/new) */
-export function InspectionCreatePage() {
-  return (
-    <StubPage
-      screen="S-5"
-      title="점검 이력 등록"
-      plan="3주차: PM/BM 토글 분기 폼 — PM은 체크리스트 OK/NG/NA, BM은 4M 분류 + 연계 알람. 소요시간 자동 계산, 교대조 자동 판정"
-    />
-  )
-}
-
 /** S-7 AI 리포트 (/reports) */
 export function ReportListPage() {
   return (

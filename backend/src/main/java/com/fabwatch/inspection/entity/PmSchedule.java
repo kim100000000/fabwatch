@@ -1,5 +1,6 @@
-package com.fabwatch.common.entity;
+package com.fabwatch.inspection.entity;
 
+import com.fabwatch.common.entity.SoftDeletableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -16,7 +17,6 @@ import java.time.Instant;
 
 /**
  * PM 스케줄 (docs/05 pm_schedules, docs/03 F-3.3) — 설비당 1개(MVP).
- * TODO: 다음 라운드에 com.fabwatch.inspection.entity 패키지로 이동 예정.
  */
 @Entity
 @Table(name = "pm_schedules")
@@ -60,5 +60,25 @@ public class PmSchedule extends SoftDeletableEntity {
         this.lastDoneAt = lastDoneAt;
         this.nextDueAt = nextDueAt;
         this.overdueAlarmSent = overdueAlarmSent;
+    }
+
+    /** 주기 설정/변경 — 다음 예정일을 호출 측(PmScheduleCalculator)이 계산해서 넘긴다. 지연 알람 플래그는 리셋. */
+    public void reschedule(CycleType cycleType, Integer cycleValue, Instant nextDueAt) {
+        this.cycleType = cycleType;
+        this.cycleValue = cycleValue;
+        this.nextDueAt = nextDueAt;
+        this.overdueAlarmSent = false;
+    }
+
+    /** PM 수행 완료 — last_done 갱신 + next_due 재계산 + 지연 알람 플래그 초기화 (docs/12 PM-7) */
+    public void markDone(Instant doneAt, Instant nextDueAt) {
+        this.lastDoneAt = doneAt;
+        this.nextDueAt = nextDueAt;
+        this.overdueAlarmSent = false;
+    }
+
+    /** 지연 알람 이벤트 발행 완료 표시 — 중복 발행 방지 */
+    public void markOverdueAlarmSent() {
+        this.overdueAlarmSent = true;
     }
 }

@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingBlock } from '@/shared/ui'
 import { toApiError } from '@/shared/api'
 import { toUserMessage } from '@/shared/lib/errorMessage'
@@ -20,6 +21,7 @@ interface EquipmentAlarmTabPanelProps {
  * (탭 전환/조치 후 재조회로 충분 — 신규 알람 실시간 수신은 S-1/S-6 담당).
  */
 export function EquipmentAlarmTabPanel({ equipmentId }: EquipmentAlarmTabPanelProps) {
+  const navigate = useNavigate()
   const [reloadKey, setReloadKey] = useState(0)
   const [busyAlarmId, setBusyAlarmId] = useState<number | null>(null)
   const [resolveTarget, setResolveTarget] = useState<Alarm | null>(null)
@@ -63,6 +65,7 @@ export function EquipmentAlarmTabPanel({ equipmentId }: EquipmentAlarmTabPanelPr
           busyAlarmId={busyAlarmId}
           onAck={(alarm) => void handleAck(alarm)}
           onResolveRequest={setResolveTarget}
+          onOpenInspection={(inspectionId) => navigate(`/inspections?id=${inspectionId}`)}
         />
       )}
 

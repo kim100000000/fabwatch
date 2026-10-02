@@ -16,6 +16,7 @@ export {
   alarmFromEvent,
   compareAlarms,
   isUnresolved,
+  linkedInspectionId,
 } from './types'
 export type {
   Alarm,

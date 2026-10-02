@@ -45,32 +45,76 @@
 
 ## 4. 점검 이력 /inspections
 
+> 구현 완료(3주차). 시각은 전부 ISO-8601 UTC 문자열. 목록은 `{content,totalElements,totalPages,number}`, 정렬은 `startedAt desc` 고정(sort 파라미터 무시), `size` 기본 20.
+
 | 메서드 | 경로 | 설명 | 권한 |
 |---|---|---|---|
-| GET | /inspections | filter: equipmentId, type, shift, workerId, hasNg, from, to | 전체 |
-| POST | /inspections | 등록. BM은 cause4m 필수(400 `CAUSE_4M_REQUIRED`), PM은 checkResults 배열 포함 가능. alarmId 있으면 해당 알람 자동 RESOLVED | 전체 |
-| GET | /inspections/{id} | 상세 (체크리스트 결과 포함) | 전체 |
-| PUT | /inspections/{id} | 수정 (작성자 본인 or ENGINEER+) | 조건부 |
-| PATCH | /inspections/{id}/review | 엔지니어 승인 | ENGINEER+ |
-| GET | /equipments/{id}/checklist | PM 체크리스트 템플릿 | 전체 |
-| POST/PUT | /equipments/{id}/checklist | 템플릿 관리 | ENGINEER+ |
+| GET | /inspections | filter: equipmentId, type(PM/BM), shift(D/N), workerId, hasNg, from, to(`startedAt` 기준 from 이상 / to 미만), page, size → `PageResponse<InspectionResponse>` | 전체 |
+| POST | /inspections | 등록 → **201** `InspectionDetailResponse`. workerId는 받지 않음(로그인 사용자) | 전체 |
+| GET | /inspections/{id} | 상세 `InspectionDetailResponse` (404 `NOT_FOUND`) | 전체 |
+| PUT | /inspections/{id} | 수정(작성자 본인 or ENGINEER+, 아니면 403 `FORBIDDEN`) → `InspectionDetailResponse` | 조건부 |
+| PATCH | /inspections/{id}/review | 엔지니어 승인. 이미 승인된 건은 멱등(기존 승인자·시각 그대로 반환) → `InspectionDetailResponse` | ENGINEER+ |
+| GET | /equipments/{id}/checklist | PM 체크리스트 템플릿. **단순 배열**(PageResponse 아님), active=true만, seq 순 → `[{id,itemName,criteria,seq,active}]` | 전체 |
+| POST | /equipments/{id}/checklist | `{itemName, criteria?, seq?}` → 201 단건. seq 생략 시 맨 뒤(최대 seq+1) | ENGINEER+ |
+| PUT | /equipments/{id}/checklist/{itemId} | `{itemName, criteria, seq, active}` → 단건. **삭제는 `active=false`**(물리 삭제 없음). seq가 null이면 순서 유지 | ENGINEER+ |
 
-POST /inspections 요청 예:
+**InspectionResponse (목록 행)**
+```json
+{
+  "id": 1, "equipmentId": 1, "equipmentCode": "LAMI-01", "equipmentName": "합착기 1호",
+  "type": "PM|BM", "shift": "D|N", "workerId": 3, "workerName": "이테크니션",
+  "startedAt": "2026-07-06T13:00:00Z", "endedAt": "2026-07-06T14:30:00Z", "durationMin": 90,
+  "content": "...", "actionTaken": "...|null",
+  "cause4m": "MAN|MACHINE|MATERIAL|METHOD|null", "causeDetail": "...|null",
+  "alarmId": 45, "hasNg": false,
+  "reviewedBy": 2, "reviewedByName": "박엔지니어", "reviewedAt": "...", "createdAt": "..."
+}
+```
+**InspectionDetailResponse** = InspectionResponse 전 필드 + `checkResults: [{checklistItemId, itemName, criteria, result:"OK|NG|NA", note}]` (결과 없으면 빈 배열).
+
+**POST /inspections 요청**
 ```json
 {
   "equipmentId": 1, "type": "BM", "shift": "N",
   "startedAt": "2026-07-06T22:10:00Z", "endedAt": "2026-07-07T00:30:00Z",
   "content": "합착 롤러 진동 이상으로 정지", "actionTaken": "베어링 교체 후 시운전",
-  "cause4m": "MACHINE", "causeDetail": "베어링 마모", "alarmId": 45
+  "cause4m": "MACHINE", "causeDetail": "베어링 마모", "alarmId": 45,
+  "checkResults": [{ "checklistItemId": 1, "result": "OK", "note": null }]
 }
 ```
+필수: equipmentId, type, startedAt, endedAt, content. 나머지 선택.
+
+**등록/수정 규칙 (에러는 공통 포맷 `{code,message,timestamp}`)**
+- `endedAt > startedAt` 아니면 400 `VALIDATION_ERROR`. 미래 시각 불가(종료 시각이 현재+1분 초과) 400 `VALIDATION_ERROR`. `durationMin`은 자동 계산(분, 내림). 24시간 초과는 허용(서버 에러 아님, 프론트 경고).
+- `shift` 생략 시 `startedAt`(KST)으로 자동 판정(D=08~20, N=20~08). PUT에서 shift 생략 시 startedAt이 바뀌었으면 재판정, 아니면 기존 값 유지.
+- BM은 `cause4m` 필수 → 400 `CAUSE_4M_REQUIRED`. PM의 cause4m/causeDetail은 무시(null 저장).
+- `checkResults`는 **PM에서만** 허용(BM에 넣으면 400), 항목 중복 불가, 해당 설비의 템플릿 항목이어야 함(아니면 400). NG가 1건이라도 있으면 `hasNg=true`.
+- `alarmId`는 **BM에서만** 허용(PM이면 400). 없는 알람 404 `NOT_FOUND`, **다른 설비 알람이면 400 `VALIDATION_ERROR`**. 연계 알람 처리: OPEN이면 작성자 명의로 자동 ACK 후 RESOLVED, ACK면 RESOLVED, 이미 RESOLVED면 그대로(에러 없음). `resolveNote`는 `BM 점검 이력 #{id}로 조치 완료`. 점검 저장과 알람 해제는 한 트랜잭션.
+- **설비 상태는 자동 변경하지 않는다.** BM 등록 후 DOWN→IDLE은 프론트가 확인 다이얼로그 후 `PATCH /equipments/{id}/status` 호출.
+- PM 등록 시 해당 설비 PM 스케줄의 `last_done_at`=종료 시각, `next_due_at` 재계산, `overdue_alarm_sent=false` 초기화. (기존 last_done보다 이전 시각의 소급 등록은 스케줄을 되돌리지 않음. 스케줄 없는 설비는 건너뜀.)
+- PM 등록으로 스케줄이 실제 갱신된 경우, 해당 설비의 미해결(OPEN/ACK) `PM_OVERDUE` 알람은 같은 트랜잭션에서 작성자 명의로 자동 ACK→RESOLVED 된다(`resolveNote`=`PM 점검 이력 #{id}로 수행 완료`, 알람이 없거나 이미 RESOLVED면 아무 일도 없음, 소급 등록·스케줄 없는 설비는 해소하지 않음). BM·타 설비 알람은 영향 없음.
+- PUT: 수정 가능 필드는 `shift?, startedAt, endedAt, content, actionTaken, cause4m, causeDetail, checkResults?`. 설비·유형·작성자·알람 연계는 불변. `checkResults`가 null이면 기존 결과 유지, 배열이면(빈 배열 포함) 기존 결과를 soft delete 후 교체하고 hasNg 재계산. 판정 순서: 404 → 403 → 400.
+- 에러 코드: 400 `VALIDATION_ERROR` / 400 `CAUSE_4M_REQUIRED` / 403 `FORBIDDEN` / 404 `NOT_FOUND`.
 
 ## 5. PM 스케줄 /pm-schedules
 
 | 메서드 | 경로 | 설명 | 권한 |
 |---|---|---|---|
-| GET | /pm-schedules | 전체 (filter: overdueOnly=true) | 전체 |
-| PUT | /equipments/{id}/pm-schedule | `{cycleType, cycleValue}` 설정/변경 → nextDueAt 재계산 | ENGINEER+ |
+| GET | /pm-schedules | `?overdueOnly=true\|false(기본)&equipmentId=` → **단순 배열**(PageResponse 아님) `[PmScheduleResponse]`, `nextDueAt` 빠른 순 | 전체 |
+| PUT | /equipments/{id}/pm-schedule | `{cycleType, cycleValue}` 설정/변경(없으면 생성) → 200 `PmScheduleResponse`. nextDueAt 재계산(기준: lastDoneAt, 없으면 현재), overdue 알람 플래그 초기화 | ENGINEER+ |
+
+```json
+PmScheduleResponse = {
+  "id": 1, "equipmentId": 2, "equipmentCode": "LAMI-02", "equipmentName": "합착기 2호",
+  "cycleType": "DAILY|WEEKLY|MONTHLY", "cycleValue": 4,
+  "lastDoneAt": "...|null", "nextDueAt": "...",
+  "overdue": true, "overdueDays": 2
+}
+```
+- `overdue` = 조회 시각 > nextDueAt. `overdueDays` = 경과 24시간 단위 내림(경과 전이면 0; 지연 직후 5시간이면 overdue=true, overdueDays=0).
+- `cycleValue` 검증(위반 400 `VALIDATION_ERROR`): WEEKLY 1~7(1=월 … 7=일), MONTHLY 1~28, DAILY는 null.
+- **next_due_at 계산(KST 날짜, last_done의 KST 시각 유지)**: DAILY=+1일 / WEEKLY=수행일 이후 첫 해당 요일(같은 요일이면 다음 주) / MONTHLY=수행일 이후 첫 해당 일자(그 달 일자가 남았으면 이번 달, 아니면 다음 달).
+- **PM 지연 알람**: 매시 :10(UTC) 스케줄러가 `next_due_at + 3일 < now` & `overdue_alarm_sent=false`인 스케줄에 `PmOverdueEvent`를 발행 → alarm 도메인이 MAJOR/`PM_OVERDUE` 알람 생성(메시지 `{설비코드} PM 예정일 경과 ({n}일)`, 설비당 미해결 PM_OVERDUE 1건이면 중복 생성 안 함) → `overdue_alarm_sent=true`. PM 이력 등록 시 플래그 리셋.
 
 ## 6. 알람 /alarms
 

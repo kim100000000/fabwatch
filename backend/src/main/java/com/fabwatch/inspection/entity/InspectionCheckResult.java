@@ -1,5 +1,6 @@
-package com.fabwatch.common.entity;
+package com.fabwatch.inspection.entity;
 
+import com.fabwatch.common.entity.SoftDeletableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -14,7 +15,6 @@ import org.hibernate.annotations.SQLRestriction;
 
 /**
  * 점검별 체크리스트 결과 (docs/05 inspection_check_results).
- * TODO: 다음 라운드에 com.fabwatch.inspection.entity 패키지로 이동 예정.
  */
 @Entity
 @Table(name = "inspection_check_results")

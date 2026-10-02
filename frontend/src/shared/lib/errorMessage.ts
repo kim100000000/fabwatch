@@ -28,6 +28,8 @@ const ERROR_MESSAGE: Record<string, string> = {
   // ACK_REQUIRED_FIRST / INVALID_ALARM_STATUS 는 서버 message 에 "현재 상태: OPEN" 처럼 실제 상태가
   // 담겨 있어 일부러 매핑하지 않는다 — NOT_FOUND/VALIDATION_ERROR/INVALID_STATUS_TRANSITION 과 동일 원칙.
   // (의도적 미매핑임을 명시해 둔다. 매핑을 추가하면 상태 정보가 사라져 오히려 불친절해진다.)
+  // 점검 이력 (docs/06 §4) — VALIDATION_ERROR(종료<=시작, 미래 시각 등)는 서버 message 가 구체적이라 매핑하지 않는다
+  CAUSE_4M_REQUIRED: 'BM 점검은 4M 원인 분류(사람/설비/자재/방법)를 선택해야 합니다.',
   // 시뮬레이터 (docs/06 §8)
   SCENARIO_ALREADY_ACTIVE:
     '해당 센서에 같은 유형의 시나리오가 이미 실행 중입니다. 기존 시나리오를 해제한 뒤 다시 주입해 주세요.',

@@ -1,5 +1,6 @@
-package com.fabwatch.common.entity;
+package com.fabwatch.inspection.entity;
 
+import com.fabwatch.common.entity.SoftDeletableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -18,7 +19,6 @@ import java.time.Instant;
 
 /**
  * 점검 이력 (docs/05 inspections, docs/03 F-3).
- * TODO: 다음 라운드에 com.fabwatch.inspection.entity 패키지로 이동 예정.
  */
 @Entity
 @Table(name = "inspections", indexes = {
@@ -121,5 +121,35 @@ public class Inspection extends SoftDeletableEntity {
         this.hasNg = hasNg;
         this.reviewedBy = reviewedBy;
         this.reviewedAt = reviewedAt;
+    }
+
+    /**
+     * 내용 수정. 설비·유형·작성자·알람 연계는 불변 (docs/06 §4 PUT).
+     * 검증은 InspectionService가 마친 값만 들어온다.
+     */
+    public void update(Shift shift, Instant startedAt, Instant endedAt, Integer durationMin, String content,
+                       String actionTaken, Cause4M cause4m, String causeDetail) {
+        this.shift = shift;
+        this.startedAt = startedAt;
+        this.endedAt = endedAt;
+        this.durationMin = durationMin;
+        this.content = content;
+        this.actionTaken = actionTaken;
+        this.cause4m = cause4m;
+        this.causeDetail = causeDetail;
+    }
+
+    public void changeHasNg(boolean hasNg) {
+        this.hasNg = hasNg;
+    }
+
+    /** 엔지니어 승인 — 이미 승인된 건은 호출하지 않는다(서비스에서 멱등 처리). */
+    public void review(Long reviewerId, Instant at) {
+        this.reviewedBy = reviewerId;
+        this.reviewedAt = at;
+    }
+
+    public boolean isReviewed() {
+        return reviewedAt != null;
     }
 }

@@ -1,0 +1,374 @@
+/* 점검 이력 도메인 전용 스타일 — 색상은 전역 토큰만 사용 (docs/04 §1) */
+
+/* ---------- 필터 바 ---------- */
+.inspection-filter {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+
+.inspection-filter .field {
+  min-width: 130px;
+}
+
+.inspection-filter .filter-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.check-inline input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+/* ---------- 목록 테이블 ---------- */
+.inspection-table tbody tr[data-ng='true'] td:first-child {
+  border-left: 3px solid var(--status-down);
+}
+
+.type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.type-badge[data-type='PM'] { color: var(--status-pm); }
+.type-badge[data-type='BM'] { color: var(--status-down); }
+
+.ng-flag {
+  color: var(--status-down);
+  font-weight: 700;
+}
+
+.review-state[data-reviewed='true'] { color: var(--status-run); }
+.review-state[data-reviewed='false'] { color: var(--text-secondary); }
+.review-state[data-pending-ng='true'] { color: var(--alarm-warning); }
+
+.inspection-content {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- 상세 모달 ---------- */
+.inspection-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.inspection-detail .detail-info {
+  margin-bottom: 0;
+}
+
+.detail-text {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.detail-section-title {
+  margin: 0 0 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.check-result[data-result='OK'] { color: var(--status-run); }
+.check-result[data-result='NG'] { color: var(--status-down); font-weight: 700; }
+.check-result[data-result='NA'] { color: var(--text-secondary); }
+
+.check-table td {
+  white-space: normal;
+}
+
+.check-table tbody tr {
+  cursor: default;
+}
+
+/* ---------- S-5 등록 폼 ---------- */
+.inspection-form-page {
+  max-width: 860px;
+}
+
+.inspection-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.inspection-form .form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+
+.form-section-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.type-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+.type-toggle button {
+  min-height: 44px;
+  min-width: 96px;
+  padding: 0 18px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.type-toggle button:disabled {
+  cursor: not-allowed;
+}
+
+.type-toggle button.active[data-type='PM'] {
+  background: var(--status-pm);
+  color: var(--bg-base);
+}
+
+.type-toggle button.active[data-type='BM'] {
+  background: var(--status-down);
+  color: var(--bg-base);
+}
+
+.field-error {
+  margin: 0;
+  color: var(--alarm-critical);
+  font-size: 12px;
+}
+
+.field-warn {
+  margin: 0;
+  color: var(--alarm-warning);
+  font-size: 12px;
+}
+
+.duration-readout {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+}
+
+.inspection-form .form-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 640px) {
+  .inspection-form .form-row-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 체크리스트 입력 행 */
+.checklist-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px 16px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-base);
+}
+
+.checklist-row[data-result='NG'] {
+  border-color: var(--status-down);
+}
+
+.checklist-name {
+  font-weight: 600;
+}
+
+.checklist-criteria {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.result-radios {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.result-radios label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.result-radios input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  cursor: pointer;
+}
+
+.result-radios label[data-checked='true'][data-result='OK'] {
+  border-color: var(--status-run);
+  color: var(--status-run);
+}
+.result-radios label[data-checked='true'][data-result='NG'] {
+  border-color: var(--status-down);
+  color: var(--status-down);
+  font-weight: 700;
+}
+.result-radios label[data-checked='true'][data-result='NA'] {
+  border-color: var(--status-idle);
+  color: var(--text-primary);
+}
+
+.result-radios label:focus-within {
+  outline: 2px solid var(--accent);
+}
+
+.checklist-row .check-note {
+  grid-column: 1 / -1;
+}
+
+.checklist-row .check-note input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.checklist-row .check-note input:focus {
+  border-color: var(--accent);
+}
+
+.ng-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--status-down);
+  border-radius: var(--radius);
+  color: var(--status-down);
+  font-size: 13px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ---------- S-3 점검 탭 / PM 스케줄 카드 ---------- */
+.pm-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--status-pm);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+
+.pm-card[data-overdue='true'] {
+  border-left-color: var(--status-down);
+}
+
+.pm-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pm-card-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pm-overdue-text {
+  color: var(--status-down);
+  font-weight: 700;
+}
+
+.pm-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.pm-form .field {
+  min-width: 120px;
+}
+
+.tab-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* 알람 해제 → 점검 이력 링크 등에서 쓰는 텍스트 링크 버튼 */
+.inline-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: inherit;
+  text-decoration: underline;
+}

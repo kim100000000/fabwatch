@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { EmptyState } from '@/shared/ui'
 import { SensorTabPanel } from '@/features/sensor'
 import { EquipmentAlarmTabPanel } from '@/features/alarm'
+import { EquipmentInspectionTabPanel } from '@/features/inspection'
 import { EquipmentStatusLogTable } from './EquipmentStatusLogTable'
 import type { EquipmentSensor } from '../types'
 import './equipment.css'
@@ -9,7 +10,7 @@ import './equipment.css'
 /** S-3 탭 구성 (docs/04 §3) + 상태 이력(F-2 상태 로그) */
 const TABS = [
   { key: 'sensor', label: '센서', next: '' },
-  { key: 'inspection', label: '점검', next: '3주차: 설비별 점검 이력 테이블 + PM 스케줄 카드' },
+  { key: 'inspection', label: '점검', next: '' },
   { key: 'alarm', label: '알람', next: '' },
   { key: 'report', label: '리포트', next: '3주차: AI 리포트 카드 목록 (DRAFT/CONFIRMED 배지)' },
   { key: 'statusLog', label: '상태 이력', next: '' },
@@ -27,7 +28,7 @@ interface EquipmentDetailTabsProps {
 
 /**
  * 설비 상세 탭.
- * 센서·알람·상태 이력은 구현 완료, 점검·리포트는 각 도메인 구현 라운드(3주차)에서 채운다.
+ * 센서·점검·알람·상태 이력은 구현 완료, 리포트는 aireport 구현 라운드에서 채운다.
  */
 export function EquipmentDetailTabs({
   equipmentId,
@@ -56,11 +57,12 @@ export function EquipmentDetailTabs({
 
       <div className="tab-panel" role="tabpanel">
         {active === 'sensor' && <SensorTabPanel equipmentId={equipmentId} sensors={sensors} />}
+        {active === 'inspection' && <EquipmentInspectionTabPanel equipmentId={equipmentId} />}
         {active === 'alarm' && <EquipmentAlarmTabPanel equipmentId={equipmentId} />}
         {active === 'statusLog' && (
           <EquipmentStatusLogTable equipmentId={equipmentId} reloadKey={statusLogReloadKey} />
         )}
-        {(active === 'inspection' || active === 'report') && (
+        {active === 'report' && (
           <EmptyState
             title="다음 라운드 구현"
             description={activeTab.next}
