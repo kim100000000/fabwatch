@@ -187,6 +187,9 @@ export function DemoControlPanel({ equipments, sensorsByEquipment }: DemoControl
             데모 자동 시작
           </button>
         </div>
+        <span className="field-hint">
+          데모 자동 시작: 약 2분 내 WARNING → CRITICAL → 자동 DOWN 이 재현됩니다.
+        </span>
 
         {error && (
           <p className="form-error" role="alert">

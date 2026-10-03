@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
+import type { AppOutletContext } from '@/app/layouts/outletContext'
 import { useAuth } from '@/app/providers/useAuth'
-import { EQUIPMENT_STATUSES, useEquipmentList } from '@/features/equipment'
+import { EQUIPMENT_STATUSES, LineKpiSection, useEquipmentList } from '@/features/equipment'
 import type { EquipmentStatus, EquipmentSummary } from '@/features/equipment'
 import { AlarmStreamList, alarmFromEvent, compareAlarms, useAlarmList } from '@/features/alarm'
 import type { Alarm, AlarmEventPayload } from '@/features/alarm'
@@ -23,11 +24,14 @@ const ALARM_STREAM_SIZE = 10
  *  - GET /equipments            : 설비 카드 목록
  *  - GET /equipments/{id}/sensor-data/latest : 카드에 표시할 센서 4값
  *  - GET /alarms                : 하단 최근 알람 스트림 + 카드 미조치 알람 수
+ *  - GET /equipments/kpi       : 라인 KPI(가동률/MTBF/MTTR/DOWN 횟수) — SSE/폴링과 별도 쿼리, 1분 갱신
  *  - SSE /stream/sensors        : sensor/alarm/status 3종 실시간 반영 (실패 시 3초 폴링 폴백)
  */
 export function DashboardPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  // 헤더 라인 선택 — 라인 KPI 조회에만 쓴다 (카드 목록 필터링은 아직 연동 전)
+  const { lineId } = useOutletContext<AppOutletContext>()
   // 데모 컨트롤은 ENGINEER+ (docs/04 §3, docs/06 §8)
   const canControlSimulator = user?.role === 'ADMIN' || user?.role === 'ENGINEER'
 
@@ -140,7 +144,7 @@ export function DashboardPage() {
     },
   })
 
-  /** 상태별 설비 수 — 현재 시점 스냅샷(누적 가동률이 아님을 라벨에 명시) */
+  /** 상태별 설비 수 — 현재 시점 스냅샷 */
   const statusCount = useMemo(() => {
     const counts: Record<EquipmentStatus, number> = { RUN: 0, IDLE: 0, DOWN: 0, PM: 0 }
     mergedEquipments.forEach((equipment) => {
@@ -166,7 +170,7 @@ export function DashboardPage() {
         <StreamStatusBadge state={stream} />
       </div>
 
-      {/* 현황 스트립 — 현재 상태 스냅샷 (기간 누적 KPI 는 4주차 /kpi API 연동 예정) */}
+      {/* 현황 스트립 — 현재 상태 스냅샷. 기간 누적 KPI 는 아래 라인 KPI 영역 */}
       <div className="kpi-strip">
         {EQUIPMENT_STATUSES.map((status) => (
           <div key={status} className="kpi-item" data-status={status}>
@@ -179,6 +183,9 @@ export function DashboardPage() {
           <span className="kpi-value mono">{unresolvedTotal}</span>
         </div>
       </div>
+
+      {/* 라인 KPI — 기간 누적 (FR-5.7). 현재 상태 스트립과 별개 */}
+      <LineKpiSection lineId={lineId} />
 
       {equipmentLoading && mergedEquipments.length === 0 && (
         <LoadingBlock label="설비 목록을 불러오는 중…" />

@@ -6,6 +6,7 @@ import com.fabwatch.common.exception.ErrorCode;
 import com.fabwatch.equipment.service.EquipmentQueryService;
 import com.fabwatch.sensor.service.SensorQueryService;
 import com.fabwatch.sensor.service.SensorSpec;
+import com.fabwatch.simulator.config.SimulatorProperties;
 import com.fabwatch.simulator.dto.ScenarioCreateRequest;
 import com.fabwatch.simulator.dto.ScenarioResponse;
 import com.fabwatch.simulator.entity.SimulationScenario;
@@ -37,6 +38,7 @@ public class ScenarioService {
     private final SensorQueryService sensorQueryService;
     private final EquipmentQueryService equipmentQueryService;
     private final ObjectMapper objectMapper;
+    private final SimulatorProperties properties;
 
     /** GET /simulator/scenarios — 활성 시나리오 목록 */
     @Transactional(readOnly = true)
@@ -83,8 +85,10 @@ public class ScenarioService {
 
     /**
      * POST /simulator/demo — 데모 자동 시나리오 시작 (FR-4.5, Should).
-     * 지정 설비(생략 시 첫 번째 설비)의 진동 센서에 DRIFT를 주입한다 — 10분에 걸쳐 crit에 도달하며
-     * WARNING → CRITICAL → 자동 DOWN → 알람 흐름이 순서대로 시연된다.
+     * 지정 설비(생략 시 첫 번째 설비)의 진동 센서에 DRIFT를 주입한다 — 데모용 기본 2분
+     * (fabwatch.simulator.demo-duration-min)에 걸쳐 crit에 도달하며 3분 시연 안에
+     * 정상 → 드리프트 → WARNING → CRITICAL → 자동 DOWN → 알람 흐름이 순서대로 일어난다.
+     * 도달 후에는 목표값에서 고정된다(DRIFT plateau).
      * 이미 주입돼 있으면 그대로 두고 현재 시나리오를 반환한다(데모 중 중복 클릭 대비).
      */
     @Transactional
@@ -102,7 +106,7 @@ public class ScenarioService {
 
         if (!scenarioRepository.existsBySensorIdAndTypeAndActiveTrue(target.sensorId(), SimulationScenario.Type.DRIFT)) {
             inject(new ScenarioCreateRequest(target.sensorId(), SimulationScenario.Type.DRIFT,
-                    Map.of("durationMin", ScenarioParams.DEFAULT_DURATION_MIN)));
+                    Map.of("durationMin", properties.demoDurationMin())));
         }
         return getActiveScenarios();
     }

@@ -59,6 +59,9 @@ fabwatch:
     max-tokens: ${AI_MAX_TOKENS:2000}
     daily-quota: ${AI_DAILY_QUOTA:20}        # 하루(KST) 전체 호출 시도 수 한도
     timeout-seconds: 30
+  simulator:
+    # 데모 자동 시작(POST /simulator/demo)의 DRIFT 지속 시간(분). 3분 시연용 기본 2분 (docs/03 F-4.2, docs/06 §8)
+    demo-duration-min: ${SIMULATOR_DEMO_DURATION_MIN:2}
   scheduler:
     # @Scheduled 전체 on/off (docs/13 §5). 테스트에서는 false로 꺼서 시간 기반 로직을 격리한다.
     enabled: ${SCHEDULER_ENABLED:true}

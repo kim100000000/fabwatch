@@ -24,4 +24,11 @@ public final class EquipmentSpecifications {
             return predicate;
         };
     }
+
+    /** 라인 소속 설비 (equipment → process → line). lineId가 null이면 전체. */
+    public static Specification<Equipment> inLine(Long lineId) {
+        return (root, query, cb) -> lineId == null
+                ? cb.conjunction()
+                : cb.equal(root.get("process").get("line").get("id"), lineId);
+    }
 }

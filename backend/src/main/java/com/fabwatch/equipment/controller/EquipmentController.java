@@ -4,12 +4,16 @@ import com.fabwatch.common.dto.PageResponse;
 import com.fabwatch.common.security.SecurityUtils;
 import com.fabwatch.equipment.dto.EquipmentCreateRequest;
 import com.fabwatch.equipment.dto.EquipmentDetailResponse;
+import com.fabwatch.equipment.dto.EquipmentKpiListResponse;
+import com.fabwatch.equipment.dto.EquipmentKpiResponse;
 import com.fabwatch.equipment.dto.EquipmentStatusChangeRequest;
 import com.fabwatch.equipment.dto.EquipmentStatusLogResponse;
 import com.fabwatch.equipment.dto.EquipmentSummaryResponse;
 import com.fabwatch.equipment.dto.EquipmentUpdateRequest;
 import com.fabwatch.equipment.entity.EquipmentStatus;
+import com.fabwatch.equipment.service.EquipmentKpiService;
 import com.fabwatch.equipment.service.EquipmentService;
+import com.fabwatch.equipment.service.KpiPeriod;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -38,6 +42,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class EquipmentController {
 
     private final EquipmentService equipmentService;
+    private final EquipmentKpiService kpiService;
 
     @GetMapping
     public PageResponse<EquipmentSummaryResponse> getEquipments(
@@ -80,5 +85,21 @@ public class EquipmentController {
             @PathVariable Long id,
             @PageableDefault(size = 20) Pageable pageable) {
         return equipmentService.getStatusLogs(id, pageable);
+    }
+
+    /**
+     * 설비별 KPI + 합산 요약 (FR-5.7). 리터럴 경로 /kpi는 /{id}보다 우선 매칭된다.
+     * period 값이 DAY|WEEK|MONTH가 아니면 400 VALIDATION_ERROR (타입 변환 실패 → 전역 핸들러).
+     */
+    @GetMapping("/kpi")
+    public EquipmentKpiListResponse getKpiList(@RequestParam(defaultValue = "DAY") KpiPeriod period,
+                                               @RequestParam(required = false) Long lineId) {
+        return kpiService.getKpiList(period, lineId);
+    }
+
+    @GetMapping("/{id}/kpi")
+    public EquipmentKpiResponse getKpi(@PathVariable Long id,
+                                       @RequestParam(defaultValue = "DAY") KpiPeriod period) {
+        return kpiService.getKpi(id, period);
     }
 }

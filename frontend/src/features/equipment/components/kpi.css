@@ -1,0 +1,132 @@
+/* KPI 위젯 (FR-5.7) — 색상은 전역 토큰만 사용 (docs/04 §1) */
+
+.kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+
+.kpi-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.kpi-card-title {
+  margin: 0;
+  font-size: 14px;
+}
+
+.kpi-range {
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* 기간 토글 */
+.kpi-period-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.kpi-period-toggle button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.kpi-period-toggle button:hover {
+  background: var(--bg-hover);
+}
+
+.kpi-period-toggle button.active {
+  background: var(--bg-hover);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 4타일 */
+.kpi-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 1024px) {
+  .kpi-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.kpi-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-base);
+}
+
+.kpi-tile[data-accent='run'] { border-top-color: var(--status-run); }
+.kpi-tile[data-accent='down'] { border-top-color: var(--status-down); }
+
+.kpi-tile-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.kpi-tile-value {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.kpi-tiles[data-size='large'] .kpi-tile-value {
+  font-size: 26px;
+}
+
+.kpi-tile-value[data-muted] {
+  color: var(--text-secondary);
+}
+
+.kpi-tile-hint {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* 설비별 KPI 접이식 표 */
+.kpi-equipment {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kpi-equipment-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kpi-equipment-link {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.kpi-equipment-link:hover {
+  color: var(--accent);
+}

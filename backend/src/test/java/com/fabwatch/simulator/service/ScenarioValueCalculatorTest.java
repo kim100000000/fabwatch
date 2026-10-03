@@ -30,14 +30,16 @@ class ScenarioValueCalculatorTest {
         Map<String, Object> param = ScenarioParams.normalizeDrift(TEMP, null);
 
         assertThat(param.get("durationMin")).isEqualTo(ScenarioParams.DEFAULT_DURATION_MIN);
+        assertThat(param.get("maxElapsedSec")).isEqualTo(600L);
+        assertThat((double) param.get("targetValue")).isCloseTo(55.8, within(1e-9)); // crit_high 55 + 노이즈 1σ(0.8)
         double slope = (double) param.get("slopePerSec");
-        // (55 - 45) / (10분 × 60초) = 0.016666.../초
-        assertThat(slope).isCloseTo(10.0 / 600.0, within(1e-9));
+        // (55.8 - 45) / (10분 × 60초) = 0.018/초
+        assertThat(slope).isCloseTo(10.8 / 600.0, within(1e-9));
 
-        // 10분 뒤 정확히 crit_high(55)에 도달
-        double after10min = ScenarioValueCalculator.applyDrift(45.0, slope, 600);
-        assertThat(after10min).isCloseTo(55.0, within(1e-6));
-        assertThat(ThresholdEvaluator.evaluate(TEMP, BigDecimal.valueOf(after10min + 0.1)).level())
+        // 10분 뒤 목표값(crit_high 55 + 1σ = 55.8)에 도달 → 노이즈가 -1σ까지 내려와도 crit(55)을 넘는다
+        double after10min = ScenarioValueCalculator.applyDrift(45.0, slope, 600, 600);
+        assertThat(after10min).isCloseTo(55.8, within(1e-6));
+        assertThat(ThresholdEvaluator.evaluate(TEMP, BigDecimal.valueOf(after10min - 0.8 + 0.05)).level())
                 .isEqualTo(SensorLevel.CRITICAL);
     }
 
@@ -46,7 +48,7 @@ class ScenarioValueCalculatorTest {
     void 드리프트_경고_먼저() {
         double slope = (double) ScenarioParams.normalizeDrift(TEMP, null).get("slopePerSec");
 
-        double after6min = ScenarioValueCalculator.applyDrift(45.0, slope, 360); // 45 + 6 = 51
+        double after6min = ScenarioValueCalculator.applyDrift(45.0, slope, 360, 600); // 45 + 6 = 51
         assertThat(ThresholdEvaluator.evaluate(TEMP, BigDecimal.valueOf(after6min)).level())
                 .isEqualTo(SensorLevel.WARNING);
     }
@@ -54,22 +56,22 @@ class ScenarioValueCalculatorTest {
     @Test
     @DisplayName("DRIFT: value += slope × 경과초 (공식 그대로)")
     void 드리프트_공식() {
-        assertThat(ScenarioValueCalculator.applyDrift(45.0, 0.02, 100)).isCloseTo(47.0, within(1e-9));
-        assertThat(ScenarioValueCalculator.applyDrift(45.0, -0.02, 100)).isCloseTo(43.0, within(1e-9));
+        assertThat(ScenarioValueCalculator.applyDrift(45.0, 0.02, 100, 600)).isCloseTo(47.0, within(1e-9));
+        assertThat(ScenarioValueCalculator.applyDrift(45.0, -0.02, 100, 600)).isCloseTo(43.0, within(1e-9));
     }
 
     @Test
     @DisplayName("DRIFT: 경과초가 0 이하면 변형 없음")
     void 드리프트_시작전() {
-        assertThat(ScenarioValueCalculator.applyDrift(45.0, 0.02, 0)).isEqualTo(45.0);
-        assertThat(ScenarioValueCalculator.applyDrift(45.0, 0.02, -10)).isEqualTo(45.0);
+        assertThat(ScenarioValueCalculator.applyDrift(45.0, 0.02, 0, 600)).isEqualTo(45.0);
+        assertThat(ScenarioValueCalculator.applyDrift(45.0, 0.02, -10, 600)).isEqualTo(45.0);
     }
 
     @Test
     @DisplayName("DRIFT: durationMin을 줄이면 기울기가 그만큼 가팔라진다")
     void 드리프트_기간_지정() {
         double slope = (double) ScenarioParams.normalizeDrift(TEMP, Map.of("durationMin", 5)).get("slopePerSec");
-        assertThat(slope).isCloseTo(10.0 / 300.0, within(1e-9));
+        assertThat(slope).isCloseTo(10.8 / 300.0, within(1e-9));
     }
 
     @Test
@@ -80,7 +82,54 @@ class ScenarioValueCalculatorTest {
 
         double slope = (double) ScenarioParams.normalizeDrift(lowOnly, null).get("slopePerSec");
         assertThat(slope).isNegative();
-        assertThat(ScenarioValueCalculator.applyDrift(-95.0, slope, 600)).isCloseTo(-110.0, within(1e-6));
+        assertThat(ScenarioValueCalculator.applyDrift(-95.0, slope, 600, 600)).isCloseTo(-111.5, within(1e-6)); // crit_low -110 − 1σ(1.5)
+    }
+
+    @Test
+    @DisplayName("DRIFT 목표값은 crit_high보다 노이즈 1σ만큼 높아서, plateau에서도 노이즈가 있는 값이 crit을 넘을 수 있다")
+    void 드리프트_목표값은_crit보다_높다() {
+        double target = (double) ScenarioParams.normalizeDrift(TEMP, null).get("targetValue");
+        assertThat(target).isGreaterThan(55.0); // crit_high
+        // plateau 값에서 -1σ 노이즈가 와도 crit(55) 이상
+        assertThat(target - 0.8).isGreaterThanOrEqualTo(55.0 - 1e-9);
+    }
+
+    @Test
+    @DisplayName("DRIFT plateau: 상한(durationMin) 도달 시점에 목표값(crit + 1σ)이 되고, 그 이후엔 값이 더 오르지 않는다")
+    void 드리프트_상한_도달_후_고정() {
+        Map<String, Object> param = ScenarioParams.normalizeDrift(TEMP, Map.of("durationMin", 2));
+        double slope = (double) param.get("slopePerSec");
+        long max = (long) param.get("maxElapsedSec");
+        assertThat(max).isEqualTo(120L);
+        assertThat((double) param.get("targetValue")).isCloseTo(55.8, within(1e-9));
+
+        // 상한 정확히 도달 = 목표값
+        assertThat(ScenarioValueCalculator.applyDrift(45.0, slope, max, max)).isCloseTo(55.8, within(1e-9));
+        // 상한 이후(1분 뒤, 수 시간 뒤)에도 목표값 그대로 — 무한 상승 방지
+        assertThat(ScenarioValueCalculator.applyDrift(45.0, slope, max + 60, max)).isCloseTo(55.8, within(1e-9));
+        assertThat(ScenarioValueCalculator.applyDrift(45.0, slope, 6 * 3600, max)).isCloseTo(55.8, within(1e-9));
+        // 상한 직전은 아직 상승 중
+        assertThat(ScenarioValueCalculator.applyDrift(45.0, slope, max - 12, max)).isCloseTo(54.72, within(1e-9));
+    }
+
+    @Test
+    @DisplayName("DRIFT: 상한이 0 이하면 상한 없음(상한 정보 없는 과거 시나리오 호환) — 기존 선형 공식")
+    void 드리프트_상한_없음_호환() {
+        assertThat(ScenarioValueCalculator.applyDrift(45.0, 0.02, 1000, 0)).isCloseTo(65.0, within(1e-9));
+    }
+
+    @Test
+    @DisplayName("DRIFT: 경과 0초는 상한과 무관하게 변형 없음")
+    void 드리프트_경과_0_상한_있음() {
+        assertThat(ScenarioValueCalculator.applyDrift(45.0, 0.02, 0, 120)).isEqualTo(45.0);
+    }
+
+    @Test
+    @DisplayName("DRIFT: 기울기를 직접 지정하면 목표값 = base + 기울기 × 상한초")
+    void 드리프트_기울기_직접_지정_목표값() {
+        Map<String, Object> param = ScenarioParams.normalizeDrift(TEMP, Map.of("durationMin", 1, "slopePerSec", 0.05));
+        assertThat(param.get("maxElapsedSec")).isEqualTo(60L);
+        assertThat((double) param.get("targetValue")).isCloseTo(45.0 + 0.05 * 60, within(1e-9));
     }
 
     // ---------- SPIKE ----------

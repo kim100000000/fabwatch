@@ -170,3 +170,62 @@ export function getStatusCandidates(from: EquipmentStatus, role: UserRole | unde
   if (role === 'TECHNICIAN') return from === 'DOWN' ? all.filter((to) => to === 'IDLE') : []
   return []
 }
+
+// ---------- KPI (FR-5.7, docs/03 F-5.4) ----------
+
+/** 집계 기간 — KST 기준 오늘 / 이번 주(월~) / 이번 달 */
+export type KpiPeriod = 'DAY' | 'WEEK' | 'MONTH'
+
+export const KPI_PERIODS: KpiPeriod[] = ['DAY', 'WEEK', 'MONTH']
+
+/** 기간 토글 라벨 */
+export const KPI_PERIOD_LABEL: Record<KpiPeriod, string> = {
+  DAY: '오늘',
+  WEEK: '이번 주',
+  MONTH: '이번 달',
+}
+
+/**
+ * KPI 수치 묶음.
+ * null 의미: mtbfHours=null → DOWN 0회('고장 없음') / mttrMin=null → 완료된 DOWN 없음('-') / availability=null → 집계 대상 시간 없음('-')
+ */
+export interface KpiValues {
+  /** MTBF (시간) = Σ RUN 시간 / DOWN 횟수 */
+  mtbfHours: number | null
+  /** MTTR (분) = DOWN 진입~이탈 평균 (진행 중 DOWN 제외) */
+  mttrMin: number | null
+  /** 가동률 0~1 비율 = RUN / (전체 − PM) */
+  availability: number | null
+  /** 기간 내 DOWN 진입 횟수 */
+  downCount: number
+}
+
+/** GET /equipments/{id}/kpi */
+export interface EquipmentKpi extends KpiValues {
+  equipmentId: number
+  period: KpiPeriod
+  /** ISO-8601 UTC */
+  periodStart: string
+  periodEnd: string
+}
+
+/** GET /equipments/kpi 의 설비별 행 */
+export interface EquipmentKpiRow extends KpiValues {
+  equipmentId: number
+  equipmentCode: string
+  equipmentName: string
+}
+
+/** GET /equipments/kpi — summary 는 합산 후 재계산한 라인 전체 값 */
+export interface LineKpi {
+  period: KpiPeriod
+  periodStart: string
+  periodEnd: string
+  summary: KpiValues
+  equipments: EquipmentKpiRow[]
+}
+
+/** '집계할 데이터 자체가 없음' 판정 — 가동률 null(집계 대상 시간 없음) + DOWN 0회 */
+export function isKpiEmpty(values: KpiValues): boolean {
+  return values.availability === null && values.downCount === 0
+}

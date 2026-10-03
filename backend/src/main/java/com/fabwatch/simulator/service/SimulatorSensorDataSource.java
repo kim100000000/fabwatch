@@ -28,6 +28,8 @@ import java.util.Random;
  * 기준값(base_value/noise_sigma)은 DB의 sensors 테이블에서 읽으므로 docs/03 4.1 표의 5설비 시드와
  * 자동으로 일치한다 — 코드에 수치를 하드코딩하지 않는다(가상값 원칙, docs/08 B-3).
  *
+ * DRIFT는 durationMin(maxElapsedSec) 경과 후 목표값(crit 도달값)에서 고정된다 — 시나리오를 안 꺼도 무한 상승하지 않는다.
+ *
  * 변형 적용 순서: STEP(기준선 이동) → DRIFT(시간 비례) → SPIKE(순간 급발).
  * SPIKE를 마지막에 두는 이유: 급발은 "그 순간의 최종값"에 얹히는 현상이기 때문.
  *
@@ -102,7 +104,8 @@ public class SimulatorSensorDataSource implements SensorDataSource {
                         ScenarioParams.doubleValue(param, "offset", 0));
                 case DRIFT -> ScenarioValueCalculator.applyDrift(value,
                         ScenarioParams.doubleValue(param, "slopePerSec", 0),
-                        elapsedSeconds(scenario.getStartedAt(), at));
+                        elapsedSeconds(scenario.getStartedAt(), at),
+                        driftMaxElapsedSeconds(param));
                 case SPIKE -> ScenarioValueCalculator.applySpike(value,
                         ScenarioParams.doubleValue(param, "probability", ScenarioParams.DEFAULT_PROBABILITY),
                         ScenarioParams.doubleValue(param, "multiplier", ScenarioParams.DEFAULT_MULTIPLIER),
@@ -121,6 +124,19 @@ public class SimulatorSensorDataSource implements SensorDataSource {
                     case SPIKE -> 2;
                 }))
                 .toList();
+    }
+
+    /**
+     * DRIFT 상한 시간(초). 정규화 시 저장한 maxElapsedSec를 우선 쓰고, 없는 과거 시나리오는 durationMin×60으로 대체한다.
+     * 둘 다 없으면 0(상한 없음).
+     */
+    private static long driftMaxElapsedSeconds(Map<String, Object> param) {
+        double maxElapsed = ScenarioParams.doubleValue(param, "maxElapsedSec", 0);
+        if (maxElapsed > 0) {
+            return Math.round(maxElapsed);
+        }
+        double durationMin = ScenarioParams.doubleValue(param, "durationMin", 0);
+        return durationMin > 0 ? Math.round(durationMin * 60) : 0;
     }
 
     private static long elapsedSeconds(Instant startedAt, Instant at) {

@@ -9,7 +9,8 @@ import java.util.Map;
 /**
  * 시나리오 파라미터 기본값·정규화 (docs/06 §8 "param 기본값", docs/03 F-4.2).
  *
- * - DRIFT: {@code {durationMin: 10}} — 10분에 걸쳐 crit에 도달하는 기울기를 자동 계산해 slope로 굳혀 저장
+ * - DRIFT: {@code {durationMin: 10}} — durationMin에 걸쳐 crit에 도달하는 기울기를 자동 계산해 slope로 굳혀 저장하고,
+ *          상한(maxElapsedSec = durationMin×60)·목표값(targetValue)도 함께 저장한다. 상한 이후엔 목표값에서 고정(plateau)
  * - SPIKE: {@code {probability: 0.1, multiplier: 1.8}}
  * - STEP : {@code {offsetRatio: 0.15}} — base_value 기준 비율을 offset(절대값)으로 굳혀 저장
  *
@@ -27,24 +28,30 @@ public final class ScenarioParams {
     }
 
     /**
-     * DRIFT 파라미터 정규화 → {durationMin, slopePerSec}
-     * slopePerSec = (목표값 − base) / (durationMin × 60).
-     * 목표값은 crit_high(없으면 warn_high, 둘 다 없으면 base의 ±20%). 하한 임계치만 있는 센서면 아래 방향으로 흐른다.
+     * DRIFT 파라미터 정규화 → {durationMin, slopePerSec, maxElapsedSec, targetValue}
+     * slopePerSec = (목표값 − base) / (durationMin × 60). maxElapsedSec = durationMin × 60 (이후 값 고정).
+     * 목표값은 crit_high + 노이즈 1σ(없으면 warn_high, 둘 다 없으면 base의 ±20%). 하한 임계치만 있는 센서면 아래 방향으로 흐른다.
      */
     public static Map<String, Object> normalizeDrift(SensorSpec spec, Map<String, Object> raw) {
         Map<String, Object> param = new LinkedHashMap<>();
         int durationMin = intValue(raw, "durationMin", DEFAULT_DURATION_MIN);
         param.put("durationMin", durationMin);
 
+        double base = toDouble(spec.baseValue(), 0);
+        long maxElapsedSec = Math.max(1L, durationMin * 60L);
+
         Double explicitSlope = doubleOrNull(raw, "slopePerSec");
         if (explicitSlope != null) {
+            // 기울기를 직접 준 경우: 목표값 = base + 기울기 × 상한초 (crit과 무관)
             param.put("slopePerSec", explicitSlope);
+            param.put("maxElapsedSec", maxElapsedSec);
+            param.put("targetValue", base + explicitSlope * maxElapsedSec);
             return param;
         }
-        double base = toDouble(spec.baseValue(), 0);
         double target = resolveDriftTarget(spec, base);
-        double seconds = Math.max(1, durationMin * 60.0);
-        param.put("slopePerSec", (target - base) / seconds);
+        param.put("slopePerSec", (target - base) / maxElapsedSec);
+        param.put("maxElapsedSec", maxElapsedSec);
+        param.put("targetValue", target);
         return param;
     }
 
@@ -73,14 +80,17 @@ public final class ScenarioParams {
      * 임계치가 하나도 없으면 base의 ±20% (base가 음수면 더 음수 방향).
      */
     private static double resolveDriftTarget(SensorSpec spec, double base) {
+        // 목표값을 crit에 정확히 맞추면 노이즈 때문에 plateau에서 '초과' 판정이 샘플당 약 50%뿐이라
+        // 데모에서 CRITICAL이 안 나올 수 있다(σ=0이면 영원히 안 나옴). crit에서 노이즈 1σ만큼 더 넘긴다.
+        double sigma = spec.noiseSigma() == null ? 0 : Math.abs(spec.noiseSigma().doubleValue());
         if (spec.critHigh() != null) {
-            return spec.critHigh().doubleValue();
+            return spec.critHigh().doubleValue() + sigma;
         }
         if (spec.warnHigh() != null) {
             return spec.warnHigh().doubleValue();
         }
         if (spec.critLow() != null) {
-            return spec.critLow().doubleValue();
+            return spec.critLow().doubleValue() - sigma;
         }
         if (spec.warnLow() != null) {
             return spec.warnLow().doubleValue();

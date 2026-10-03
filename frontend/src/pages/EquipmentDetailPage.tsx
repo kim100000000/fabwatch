@@ -6,6 +6,7 @@ import {
   EquipmentDetailTabs,
   EquipmentFormDialog,
   EquipmentInfoPanel,
+  EquipmentKpiCard,
   EquipmentStatusDialog,
   getStatusCandidates,
   useEquipmentDetail,
@@ -94,6 +95,7 @@ export function EquipmentDetailPage() {
           )}
 
           <EquipmentInfoPanel equipment={equipment} />
+          <EquipmentKpiCard equipmentId={equipment.id} />
           <EquipmentDetailTabs
             equipmentId={equipment.id}
             sensors={equipment.sensors}

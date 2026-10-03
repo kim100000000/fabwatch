@@ -99,17 +99,30 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 - [x] **QA**: HIGH 1(thinking 토큰 vs max_tokens) / MED 5 / LOW 다수 → H-1·M-1~M-5·L-1·L-2·L-4~L-6 수정. 리포트: `.claude/_workspace/qa/f6-ai리포트_20261003.md`. 간헐 로그인 401의 원인(테스트 컨텍스트들이 같은 H2 인메모리 DB 공유+create-drop)을 찾아 컨텍스트별 고유 DB로 해결
 - [x] **실MySQL+브라우저 라이브 확인(AI_PROVIDER=mock)**: 생성 202→3초 후 DRAFT, TECHNICIAN 403, 중복 409, 편집→저장→확정, 확정 후 PUT/재확정 409, AI 원본 보존, 악성 마크다운(script/onerror/javascript:/이미지) 제거 확인, ai_call_logs 기록
 
+### 4주차 진행 — 2026-10-03
+- [x] **KPI(FR-5.7)**: KpiCalculator 순수함수(가동률=RUN/(전체−PM), MTBF=ΣRUN/DOWN진입, MTTR=DOWN 진입~이탈 평균·진행중 제외, KST 기간 절삭, 합산 재계산) + EquipmentKpiService(로그 2쿼리) + `GET /equipments/{id}/kpi`·`GET /equipments/kpi`. 프론트: 설비 상세 KPI 카드, 대시보드 라인 KPI(+설비별 표). 단위테스트 22+, 손계산 3건이 실MySQL 로그와 일치(QA)
+- [x] **시뮬레이터**: DRIFT 상한(plateau) 도입(무한 상승 해결), 목표값=crit+노이즈 1σ(crit 정확히면 plateau에서 CRITICAL 확률 ~49%/샘플이라), 데모 자동 시작 2분(`SIMULATOR_DEMO_DURATION_MIN`). **라이브 실측: 경고 ~52초 → 임계+자동 DOWN 100~109초**
+- [x] **QA**: HIGH 0 / MED 3 수정(KPI 첫 로딩 영구 로딩 버그, DRIFT 목표값, MTTR 힌트 보강). 리포트 `.claude/_workspace/qa/f5-kpi시뮬레이터_20261003.md`. 테스트 365→411, 프론트 build/lint 통과
+- [x] **README.md 작성** + 스크린샷 5장(`docs/screenshots/`): 현장 경험→기능 매핑, 아키텍처(mermaid), 실행 방법, 3분 시연, 트러블슈팅 6건, 한계. 배포 URL은 아직 없음(배포 전)
+- [x] 라이브 데모 환경 정리(로컬 DB): 미해결 알람 해제·설비 RUN 복귀·시나리오 해제 → 바로 시연 가능한 상태
+
 ### 남음
 - [ ] **실 Claude API 호출 검증** (ANTHROPIC_API_KEY 필요, `AI_PROVIDER=claude`): 응답 형식·토큰·지연(60초 내)·effort low 품질 확인. 문제 시 AI_MAX_TOKENS 상향/effort 조정
-- [ ] 3주차 여유분: FR-2.3 임계치 편집 화면, FR-6.5 교대 인수인계 요약(Should)
-- [ ] 4주차: KPI + 테스트 + 배포 + 포트폴리오 README 패키징
+- [ ] **배포(Railway 백+DB, Vercel 프론트)** — 사용자 계정/외부 공개 필요. 저장소 준비(Dockerfile/설정/환경변수/CORS/application-prod) → 사용자 확인 후 실배포 → 스모크
+- [ ] 포트폴리오 마무리: 이력서용 3줄 설명, 시연 GIF/영상(선택), 배포 URL을 README에 반영, 지인 1명 3분 테스트
+- [ ] 여유분: 임계치 편집 화면(FR-2.3), 교대 인수인계 요약(FR-6.5, Should)
 
 ## 5. 다음 작업 지시 (그대로 실행 가능)
 
 ```
-다음: 4주차 — KPI(FR-5.7: MTBF/MTTR/가동률, MTTR 정의는 DOWN 진입~이탈) + 테스트 정리(docs/12 4대 핵심 도메인) + 배포(Railway+Vercel, docs/13) + 포트폴리오 README 패키징.
-   S-1 대시보드 KPI 스트립을 누적 가동률로 교체(2주차 이월분)도 여기서 처리.
-   실 Claude 호출 검증은 API 키 준비되면 먼저 수행 (위 '남음' 참고).
+다음: 4주차 남은 것 — (1) 배포 준비·실배포(사용자 확인 필요: Railway/Vercel 계정, 공개 URL), (2) 이력서 3줄·시연 GIF, (3) 실 Claude 호출 검증(키 준비 시 최우선).
+   배포 준비는 저장소 쪽만 먼저 가능: backend Dockerfile, application-prod.yml(환경변수 주입, ddl-auto 정책, CORS 허용 오리진), vercel.json(SPA 라우팅·API 베이스 URL), docs/13 절차 점검.
+   배포 환경 주의: JWT_SECRET 필수 고정(미설정 시 재시작마다 로그인 풀림), SSE 프록시/타임아웃, AI 쿼터·키는 환경변수, 시드 계정 비밀번호는 데모용임을 README에 명시, MySQL @Lob 길이 이슈는 해결됨.
+
+KPI 후속(QA LOW/MED 이월):
+   - K-1: 기간 시작 전 진입해 계속 DOWN인 설비는 'DOWN 0회·MTBF 고장 없음·가동률 0%'로 표시됨(스펙대로이나 모순으로 읽힘). ongoingDown/completedDownCount 필드 추가 검토
+   - LOW: BM을 PM 상태로 기록하면 가동률 과대, 반올림으로 0.0 표시, 가동률 0.99996→'100.0%', 대시보드 KPI에 선택 라인명 미표시, 헤더 라인 필터가 설비 카드 목록엔 미적용(KPI에만), 프론트 단위 테스트 없음, 대상 설비가 이미 DOWN이면 CRITICAL이 나도 자동 DOWN 생략(정상)
+   - 테스트 누락(QA T-1~T-7): 기간 이전부터 끝까지 DOWN 지속, 동일 changed_at 쿼리 통합, 노이즈 경로 plateau CRITICAL 판정, SimulatorProperties 바인딩
 
 F-6 후속:
    - 코드 방어 못 한 항목: 복구 5분 기준 vs 큐 최악 대기(약 10분) — 워커 시작 시점에 updated_at 갱신하면 해소. 기동 시 info 로그로 경고만 함
@@ -121,7 +134,6 @@ F-3 이월/후속 (우선순위 순):
    - 점검 이력 작업자 필터: 일반 역할이 쓸 사용자 목록 API가 없어 '내 점검만'으로 대체함. 필요하면 사용자 목록(이름만) 조회 API 추가
    - PM 체크리스트 템플릿 관리 UI 없음(API만 있음, ENGINEER+). 시드 템플릿으로 동작
    - 시드 PM 스케줄이 8월 기준이라 5대 전부 OVERDUE(실DB는 시드 건너뜀). 데모 전에 스케줄 재설정 또는 DB 시드 재생성 필요
-   - 시뮬레이터 DRIFT는 상한이 없어 시나리오를 안 끄면 값이 무한 상승(실측: 수 시간 뒤 온도 1721℃). crit 도달 후 클램프 또는 자동 해제 고려
    - 서버 재시작마다 JWT 시크릿이 바뀌어 로그인이 풀림(JWT_SECRET 미설정). .env에 고정값 두면 개발 편의 개선
    - QA LOW 잔여: DOWN→IDLE이 역할값을 보지 않음(알려진 3역할 선결조건 권장, EquipmentService.validateManualChange), 판정순서(403→400)·null/미지 역할 테스트 없음,
      POST /alarms/manual로 TECHNICIAN이 CRITICAL을 올리면 autoDown 발생(기존 설계, docs/03 명시 권장), PM 이력 수정 시 endedAt 변경이 스케줄에 미반영,
@@ -140,6 +152,7 @@ F-3 이월/후속 (우선순위 순):
 
 | 날짜 | 작업 | 결과/결정 |
 |---|---|---|
+| 2026-10-03 | **4주차 KPI + 시뮬레이터 개선 + README/스크린샷** (하네스: backend/frontend 병렬 → mes-qa → 수정 → 라이브 검증) | KPI(가동률/MTBF/MTTR, KST 절삭·합산 재계산)·설비 상세/대시보드 위젯, DRIFT plateau(crit+1σ)+데모 2분(실측 경고 52초→자동 DOWN 100~109초). 테스트 365→411. QA HIGH 0, MED 3 수정, 손계산 3건 실DB 일치. 라이브에서 확인: 숨김 탭은 폴링 중지(설계), 세션은 curl 로그인이 refresh token을 교체해 브라우저 세션을 끊을 수 있음(사용자당 1개 저장). README.md+스크린샷 5장 작성. 데모 환경 정리 후 커밋. 배포·이력서 3줄·실Claude 호출 검증은 남음 |
 | 2026-10-03 | **3주차 F-6 AI 리포트** (하네스: backend/frontend 병렬 → mes-qa → 수정 2개 병렬 → 라이브 검증) | aireport 도메인(비동기 202, 쿼터, 호출 로그, 키 마스킹, 인젝션 방어, 확정본 불변), S-7+설비 리포트 탭+생성 진입점. 테스트 235→365, 프론트 build/lint 통과. QA에서 HIGH 1(Sonnet 5.5가 thinking 기본 ON이라 max_tokens 2000으론 본문 빈/잘림 위험 — claude-api 스킬로 사양 확인 후 effort low+max_tokens 4096+타임아웃 60초로 수정), MED 5(키 개행 시 로그 노출 경로, 간헐 401=테스트 H2 공유, 확정 레이스, 알람/점검 경로 중복 생성, docs/11 권한표) 수정. 실MySQL+브라우저 라이브 확인은 AI_PROVIDER=mock 기준. **실 Claude 호출은 API 키 없어 미검증**. 리포트: `.claude/_workspace/qa/f6-ai리포트_20261003.md` |
 | 2026-10-02 | **3주차 F-3 점검 이력 + PM 스케줄 + 알람 이력 가시화** (하네스: backend-dev/frontend-dev 병렬 → mes-qa → 라이브 검증·수정) | 점검 이력 CRUD·승인·체크리스트·PM 스케줄·PM 지연 알람(이벤트)·BM→알람 자동 해제, S-4/S-5/점검탭/OVERDUE 배지/알람 해제사유 표시. 테스트 156→235, 프론트 build/lint 통과. QA HIGH 0, MED 2 수정. 실MySQL 라이브 확인 중 PM 등록 후 PM_OVERDUE 알람 잔존 결함 발견→자동 해소로 수정. 이월: BM 연결 강제, 작업자 필터, 템플릿 관리 UI, 시드 PM 스케줄 재설정. 리포트: `.claude/_workspace/qa/f3-점검이력_20261002.md` |
 | 2026-10-02 | **상태 머신 개선(F-2)** (하네스: backend-dev/frontend-dev 병렬 → mes-qa) | DOWN=BM(계획 외 정지) 취급, 라벨 "DOWN (BM)". 신규 DOWN→IDLE(사유 필수, TECHNICIAN 포함 전 역할), DOWN→RUN(사유 필수, ENGINEER+), DOWN→PM 유지, PM→RUN 계속 불가. 권한 판정은 EquipmentService.validateManualChange 한 곳(404→400허용표→403권한→400사유). MTTR 정의 DOWN 진입~이탈로 변경(구현은 4주차). 별도 컬럼 없이 로그의 DOWN→RUN이 시운전 생략 표시. 문서 6종(03/06/11/12/14+memory) 동기화. 테스트 114→156 통과, 프론트 build/lint 통과. QA: HIGH 0 / MED 3(설비수정폼 라벨 누락, docs/11 권한표 stale, 시드가 DOWN→PM 경로) 모두 수정. 실서버 확인: 브라우저 DOWN→IDLE 직행 성공, TECHNICIAN API 403/400/403 확인. 리포트: `.claude/_workspace/qa/f2-상태머신개선_20261002.md`. 실DB는 기존 시드 로그 유지(시드는 빈 DB에서만 실행) |

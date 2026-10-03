@@ -3,11 +3,14 @@ import type { PageResponse } from '@/shared/api'
 import type {
   EquipmentCreateRequest,
   EquipmentDetail,
+  EquipmentKpi,
   EquipmentListFilter,
   EquipmentStatusChangeRequest,
   EquipmentStatusLog,
   EquipmentSummary,
   EquipmentUpdateRequest,
+  KpiPeriod,
+  LineKpi,
   LineTree,
 } from '../types'
 
@@ -93,4 +96,32 @@ export async function fetchEquipmentStatusLogs(
 export async function fetchLines(signal?: AbortSignal): Promise<LineTree[]> {
   const { data } = await apiClient.get<PageResponse<LineTree>>('/lines', { signal })
   return data.content
+}
+
+/** GET /equipments/{id}/kpi — 설비 KPI (period 기본 DAY, 전 역할 조회) */
+export async function fetchEquipmentKpi(
+  equipmentId: number,
+  period: KpiPeriod,
+  signal?: AbortSignal,
+): Promise<EquipmentKpi> {
+  const { data } = await apiClient.get<EquipmentKpi>(`/equipments/${equipmentId}/kpi`, {
+    params: { period },
+    signal,
+  })
+  return data
+}
+
+/**
+ * GET /equipments/kpi — 라인 전체 KPI + 설비별 KPI. lineId 없으면 전체 라인.
+ * 응답은 PageResponse 가 아니라 { summary, equipments[] } 구조라 content 를 꺼내지 않는다.
+ */
+export async function fetchLineKpi(
+  query: { period: KpiPeriod; lineId?: number | null },
+  signal?: AbortSignal,
+): Promise<LineKpi> {
+  const { data } = await apiClient.get<LineKpi>('/equipments/kpi', {
+    params: { period: query.period, lineId: query.lineId ?? undefined },
+    signal,
+  })
+  return data
 }

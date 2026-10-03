@@ -25,7 +25,8 @@
 | PUT | /equipments/{id} | 수정 | ADMIN |
 | PATCH | /equipments/{id}/status | `{toStatus, reason}` 상태 전환. 400 `INVALID_STATUS_TRANSITION`. `DOWN→IDLE`·`DOWN→RUN`은 reason 필수(400 `VALIDATION_ERROR`). **권한: 기본 ENGINEER+, 단 `DOWN→IDLE`은 TECHNICIAN도 가능** (docs/03 F-2) | ENGINEER+ (DOWN→IDLE은 전체) |
 | GET | /equipments/{id}/status-logs | 상태 변경 이력 | 전체 |
-| GET | /equipments/{id}/kpi | `?period=DAY|WEEK|MONTH` → `{mtbfHours, mttrMin, availability, downCount}` | 전체 |
+| GET | /equipments/{id}/kpi | `?period=DAY|WEEK|MONTH`(기본 DAY, 그 외 값 400 `VALIDATION_ERROR`, 없는 설비 404) → `{equipmentId, period, periodStart, periodEnd, mtbfHours, mttrMin, availability, downCount}`. periodStart/End는 UTC ISO(경계는 KST 00:00/월요일/1일). `mtbfHours`(시간, DOWN 진입 0회면 null)·`mttrMin`(분, 완료된 DOWN 0건이면 null)·`availability`(0~1 비율, 분모 0이면 null)는 **null 가능**(키는 항상 존재), `downCount`는 기간 내 DOWN 진입 횟수. 계산 규칙은 docs/03 F-5.4 | 전체 |
+| GET | /equipments/kpi | `?period=&lineId=` → `{period, periodStart, periodEnd, summary:{mtbfHours, mttrMin, availability, downCount}, equipments:[{equipmentId, equipmentCode, equipmentName, mtbfHours, mttrMin, availability, downCount}]}`. `summary`는 **합산 후 재계산**(비율 평균 아님), 삭제된 설비 제외, 설비는 코드순. 없는 lineId 404. 리터럴 경로라 `/equipments/{id}`보다 우선 매칭 | 전체 |
 
 > 임계치 수정 API(`PUT .../sensors/{sensorId}/thresholds`)는 §3 센서 데이터로 이동(센서 소유 리소스라 sensor 도메인에 구현).
 > `GET /equipments/{id}` 상세는 2주차 기준 기본정보만 반환 — 센서/PM스케줄/미해결알람수 통합은 아직 미완료(memory.md 참고).
@@ -180,9 +181,9 @@ PmScheduleResponse = {
 | GET | /simulator/scenarios | 활성 시나리오 목록 | ENGINEER+ |
 | POST | /simulator/scenarios | `{sensorId, type: DRIFT|SPIKE|STEP, param: {...}}` 주입 | ENGINEER+ |
 | DELETE | /simulator/scenarios/{id} | 해제 (정상 복귀) | ENGINEER+ |
-| POST | /simulator/demo | 데모 자동 시나리오 시작 (FR-4.5) | ENGINEER+ |
+| POST | /simulator/demo | 데모 자동 시나리오 시작 (FR-4.5). 진동 센서에 DRIFT를 주입하며 durationMin은 설정 `fabwatch.simulator.demo-duration-min`(기본 **2분**, 환경변수 `SIMULATOR_DEMO_DURATION_MIN`) — 약 2~3분 안에 정상 → 드리프트 → WARNING → CRITICAL → 자동 DOWN. 이미 주입돼 있으면 그대로 두고 활성 목록 반환 | ENGINEER+ |
 
-param 기본값: DRIFT `{durationMin: 10}` (10분에 crit 도달 기울기 자동 계산) / SPIKE `{probability: 0.1, multiplier: 1.8}` / STEP `{offsetRatio: 0.15}`
+param 기본값: DRIFT `{durationMin: 10}` (durationMin분에 crit 도달하는 기울기 자동 계산, 응답 param에 `slopePerSec`·`maxElapsedSec`·`targetValue` 포함. **상한 도달 후엔 목표값에서 고정**되어 해제하지 않아도 무한 상승하지 않음) / SPIKE `{probability: 0.1, multiplier: 1.8}` / STEP `{offsetRatio: 0.15}`
 
 ## 9. 관리 /admin
 
