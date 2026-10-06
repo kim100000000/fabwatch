@@ -40,6 +40,7 @@
 - **점검 이력**: PM 체크리스트(OK/NG/NA, NG는 엔지니어 확인 대상), BM 4M 분류, 알람 연계 시 자동 해제, 엔지니어 승인
 - **AI 고장 리포트**: AI 원본(draft)과 사람이 고친 확정본(final)을 **분리 보관**, 확정 후 수정 불가, 일일 쿼터
 - **인증/권한**: JWT(Access 30분 + Refresh 14일), ADMIN / ENGINEER / TECHNICIAN, 로그인 5회 실패 잠금
+- **임계치 관리**: 센서별 warn/crit 4값을 ADMIN만 수정(사유 필수, 순서·자릿수 검증, 전부 비우기 차단), 누가·언제·왜·이전→이후가 이력으로 남음
 
 ## 아키텍처
 
@@ -80,7 +81,7 @@ flowchart LR
 | Frontend | React 18, TypeScript, Vite, Recharts, react-markdown |
 | 실시간 | SSE (단방향 푸시라 WebSocket 불필요) + 폴링 폴백 |
 | AI | Claude API (`claude-sonnet-5-5`), 비동기 생성(202 + 폴링) |
-| 테스트 | JUnit 5, MockMvc, H2(MySQL 모드) — 백엔드 360개+ |
+| 테스트 | JUnit 5, MockMvc, H2(MySQL 모드) — 백엔드 430개+ |
 
 ## 실행 방법
 
@@ -157,7 +158,7 @@ cd frontend && npm run build && npm run lint
 - 상태 머신 + CRUD + AI 리포트는 숙련 개발자가 단기간에 복제할 수 있는 구조입니다. 이 프로젝트의 차별점은 사업적 해자가 아니라 **현장 도메인 지식이 기능에 반영된 정도**입니다.
 - 단일 인스턴스 전제(SSE 브로드캐스터, AI 쿼터 락)입니다. 확장 시 외부 브로커/분산 락이 필요합니다(`// SCALE:` 주석으로 표시).
 - 멀티테넌시는 설계만 했고(`// TENANT:` 주석 지점) 구현하지 않았습니다.
-- 임계치 편집 화면, 교대 인수인계 요약, 점검 이력 작업자 필터(사용자 목록 API)는 미구현입니다.
+- 교대 인수인계 요약(AI)과 관리자용 사용자 등록/비활성화 화면은 미구현입니다. 실제 Claude 호출은 API 키 준비 후 별도 검증이 필요합니다(지금까지는 mock으로 전체 흐름만 검증).
 
 ## 문서
 

@@ -56,9 +56,10 @@ fabwatch:
     provider: ${AI_PROVIDER:claude}          # claude | mock (mock은 명시했을 때만 — 키가 없다고 자동 mock 금지)
     api-key: ${ANTHROPIC_API_KEY:}
     model: ${AI_MODEL:claude-sonnet-5-5}
-    max-tokens: ${AI_MAX_TOKENS:2000}
+    max-tokens: ${AI_MAX_TOKENS:4096}        # 사고 토큰 포함 출력 상한 (docs/13). 2000은 thinking 기본 ON 모델에서 본문이 비거나 잘림
     daily-quota: ${AI_DAILY_QUOTA:20}        # 하루(KST) 전체 호출 시도 수 한도
-    timeout-seconds: 30
+    timeout-seconds: ${AI_TIMEOUT_SECONDS:60} # Claude 응답 읽기 타임아웃 (connect 10초 고정)
+    effort: ${AI_EFFORT:low}                 # low | medium | high
   simulator:
     # 데모 자동 시작(POST /simulator/demo)의 DRIFT 지속 시간(분). 3분 시연용 기본 2분 (docs/03 F-4.2, docs/06 §8)
     demo-duration-min: ${SIMULATOR_DEMO_DURATION_MIN:2}

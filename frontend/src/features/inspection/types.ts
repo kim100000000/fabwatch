@@ -147,8 +147,8 @@ export interface InspectionFilterValue {
   equipmentId: number | null
   type: InspectionType | null
   shift: Shift | null
-  /** true 면 로그인 사용자 본인 점검만 (작업자 목록 API 가 없어 '내 점검' 토글로 대체) */
-  mineOnly: boolean
+  /** 작업자 id (GET /inspections?workerId=) — null 이면 전체. '나' 버튼은 로그인 사용자 id 를 넣는다 */
+  workerId: number | null
   hasNg: boolean
   fromDate: string
   toDate: string
@@ -158,7 +158,7 @@ export const EMPTY_INSPECTION_FILTER: InspectionFilterValue = {
   equipmentId: null,
   type: null,
   shift: null,
-  mineOnly: false,
+  workerId: null,
   hasNg: false,
   fromDate: '',
   toDate: '',

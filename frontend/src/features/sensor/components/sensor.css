@@ -284,3 +284,174 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- 임계치 편집 / 이력 (FR-2.3) ---------- */
+.sensor-chart-sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sensor-chart-actions {
+  margin-left: auto;
+}
+
+/* 카드 안 보조 버튼 — 차트 영역을 밀어내지 않도록 낮게 (.btn 기본 44px 를 덮는다) */
+.sensor-chart-actions .btn {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.threshold-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.threshold-dialog .mono,
+.threshold-current .mono,
+.threshold-log .mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 위험 안내 — 알람 판정에 바로 반영된다는 경고 (경고색 토큰) */
+.threshold-warning {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--alarm-warning);
+  border-radius: var(--radius);
+  color: var(--alarm-warning);
+  font-size: 13px;
+}
+
+.threshold-meta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.threshold-current {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.threshold-current > div {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-base);
+}
+
+.threshold-current dt {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.threshold-current dd {
+  margin: 2px 0 0;
+}
+
+.threshold-current > div[data-kind='warn'] dt { color: var(--alarm-warning); }
+.threshold-current > div[data-kind='crit'] dt { color: var(--alarm-critical); }
+
+.threshold-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.threshold-fields legend {
+  padding: 0 6px;
+  font-size: 13px;
+}
+
+.threshold-fields .field[data-kind='warn'] label { color: var(--alarm-warning); }
+.threshold-fields .field[data-kind='crit'] label { color: var(--alarm-critical); }
+
+.threshold-fields .field input[aria-invalid='true'] {
+  border-color: var(--alarm-critical);
+}
+
+.field-error {
+  margin: 0;
+  color: var(--alarm-critical);
+  font-size: 12px;
+}
+
+.threshold-log {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 12px;
+}
+
+.threshold-log > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.threshold-log[open] > summary {
+  color: var(--text-primary);
+}
+
+.threshold-log-scroll {
+  overflow-x: auto;
+  margin-bottom: 8px;
+}
+
+.threshold-log-table td,
+.threshold-log-table th {
+  white-space: normal;
+  vertical-align: top;
+}
+
+.threshold-log-reason {
+  min-width: 140px;
+  word-break: break-word;
+}
+
+.threshold-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.threshold-diff li {
+  display: flex;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.threshold-diff .diff-label {
+  min-width: 56px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.threshold-diff li[data-kind='warn'] .diff-label { color: var(--alarm-warning); }
+.threshold-diff li[data-kind='crit'] .diff-label { color: var(--alarm-critical); }
+
+@media (max-width: 640px) {
+  .threshold-current,
+  .threshold-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -1,6 +1,13 @@
 import { apiClient, unwrapList } from '@/shared/api'
 import type { PageResponse } from '@/shared/api'
-import type { SensorLatest, SensorSeriesQuery, SensorSeriesResponse } from '../types'
+import type {
+  SensorDefinition,
+  SensorLatest,
+  SensorSeriesQuery,
+  SensorSeriesResponse,
+  ThresholdLog,
+  ThresholdUpdateRequest,
+} from '../types'
 
 /**
  * GET /equipments/{id}/sensor-data/latest — 센서별 최신값 1건씩 (카드용, docs/06 §3)
@@ -40,4 +47,49 @@ export async function fetchSensorSeries(
     },
   )
   return { ...data, series: data.series ?? [] }
+}
+
+/**
+ * GET /equipments/{id}/sensors — 설비 센서 정의 목록 (임계치 편집 진입용, 전체 로그인 사용자).
+ * 목록 공통 래핑({content,...}) 응답.
+ */
+export async function fetchEquipmentSensors(
+  equipmentId: number,
+  signal?: AbortSignal,
+): Promise<SensorDefinition[]> {
+  const { data } = await apiClient.get<PageResponse<SensorDefinition> | SensorDefinition[]>(
+    `/equipments/${equipmentId}/sensors`,
+    { signal },
+  )
+  return unwrapList(data, `GET /equipments/${equipmentId}/sensors`)
+}
+
+/**
+ * PUT /equipments/{id}/sensors/{sensorId}/thresholds — 임계치 수정 (ADMIN 전용).
+ * 400 INVALID_THRESHOLD_RANGE / 403 FORBIDDEN(ENGINEER·TECHNICIAN). 갱신된 센서 정의를 돌려받는다.
+ */
+export async function updateSensorThresholds(
+  equipmentId: number,
+  sensorId: number,
+  request: ThresholdUpdateRequest,
+): Promise<SensorDefinition> {
+  const { data } = await apiClient.put<SensorDefinition>(
+    `/equipments/${equipmentId}/sensors/${sensorId}/thresholds`,
+    request,
+  )
+  return data
+}
+
+/** GET /equipments/{id}/sensors/{sensorId}/thresholds/logs — 임계치 변경 이력 (최신순, 전체 로그인 사용자) */
+export async function fetchThresholdLogs(
+  equipmentId: number,
+  sensorId: number,
+  size: number,
+  signal?: AbortSignal,
+): Promise<PageResponse<ThresholdLog>> {
+  const { data } = await apiClient.get<PageResponse<ThresholdLog>>(
+    `/equipments/${equipmentId}/sensors/${sensorId}/thresholds/logs`,
+    { params: { page: 0, size }, signal },
+  )
+  return data
 }

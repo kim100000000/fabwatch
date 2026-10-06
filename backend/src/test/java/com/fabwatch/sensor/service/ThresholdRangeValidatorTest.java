@@ -80,9 +80,19 @@ class ThresholdRangeValidatorTest {
     }
 
     @Test
-    @DisplayName("전부 NULL(임계치 미사용)은 통과한다")
-    void 전부_NULL() {
-        assertThatCode(() -> validate(null, null, null, null)).doesNotThrowAnyException();
+    @DisplayName("전부 NULL은 거부된다 — 센서 감시가 조용히 꺼지는 것을 막는다(요청에서 키를 빠뜨려도 동일)")
+    void 전부_NULL_거부() {
+        assertThatThrownBy(() -> validate(null, null, null, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_THRESHOLD_RANGE);
+    }
+
+    @Test
+    @DisplayName("한 방향 값 1개만 있어도 통과한다 (예: crit_high만 있는 센서)")
+    void 값_1개만() {
+        assertThatCode(() -> validate(null, null, null, "55")).doesNotThrowAnyException();
+        assertThatCode(() -> validate(null, null, "35", null)).doesNotThrowAnyException();
     }
 
     @Test

@@ -163,3 +163,65 @@ export function levelOf(
   }
   return 'NORMAL'
 }
+
+/* ------------------------------------------------------------------
+ * 센서 정의 · 임계치 편집 (FR-2.3) — 백엔드 sensor/dto/SensorResponse·ThresholdLogResponse 기준
+ * ------------------------------------------------------------------ */
+
+/** GET /equipments/{id}/sensors 항목 · PUT thresholds 응답 (SensorResponse) — 임계치 4값은 NULL 가능 */
+export interface SensorDefinition extends SensorThresholds {
+  sensorId: number
+  equipmentId: number
+  sensorType: SensorType
+  unit?: string | null
+  /** 시뮬레이터 정상 기준값(평균) — 임계치 입력 시 참고용 */
+  baseValue?: number | null
+  noiseSigma?: number | null
+}
+
+/** 임계치 4값 (편집 요청/로그 공통, NULL = 해당 방향 미사용) */
+export interface ThresholdValues {
+  warnLow: number | null
+  warnHigh: number | null
+  critLow: number | null
+  critHigh: number | null
+}
+
+/** PUT /equipments/{id}/sensors/{sensorId}/thresholds 요청 — ADMIN 전용, reason 필수(300자 이하) */
+export interface ThresholdUpdateRequest extends ThresholdValues {
+  reason: string
+}
+
+/** GET /equipments/{id}/sensors/{sensorId}/thresholds/logs 항목 (ThresholdLogResponse) */
+export interface ThresholdLog {
+  id: number
+  sensorId: number
+  equipmentId: number
+  oldWarnLow: number | null
+  oldWarnHigh: number | null
+  oldCritLow: number | null
+  oldCritHigh: number | null
+  newWarnLow: number | null
+  newWarnHigh: number | null
+  newCritLow: number | null
+  newCritHigh: number | null
+  reason: string
+  changedBy: number | null
+  /** 사용자 조회 실패/시스템이면 비어 있을 수 있다 */
+  changedByName?: string | null
+  /** UTC ISO */
+  changedAt: string
+}
+
+/** 변경 사유 최대 길이 (백엔드 @Size(max = 300)) */
+export const THRESHOLD_REASON_MAX = 300
+
+/**
+ * 설비 헤더용 센서 종류 요약 — '온도·진동·압력·전류 (4종)'.
+ * 종류 순서는 SENSOR_TYPE_ORDER 로 고정하고, 센서가 없으면 '센서 없음'.
+ */
+export function summarizeSensorTypes(sensors: { sensorType: SensorType }[]): string {
+  const types = [...new Set(sensors.map((sensor) => sensor.sensorType))].sort(compareSensorType)
+  if (types.length === 0) return '센서 없음'
+  return `${types.map((type) => SENSOR_TYPE_LABEL[type] ?? type).join('·')} (${types.length}종)`
+}

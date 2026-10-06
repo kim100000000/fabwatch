@@ -1,4 +1,7 @@
 export { login, logout } from './api/authApi'
+export { fetchUserLookup } from './api/userApi'
+export { useUserLookup } from './api/useUserLookup'
+export type { UserLookupResult } from './api/useUserLookup'
 export { LoginForm } from './components/LoginForm'
 export { ROLE_LABEL } from './types'
-export type { AuthUser, UserRole, LoginRequest, LoginResponse } from './types'
+export type { AuthUser, UserRole, UserLookupItem, LoginRequest, LoginResponse } from './types'

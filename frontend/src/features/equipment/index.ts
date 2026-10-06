@@ -40,6 +40,8 @@ export type {
   EquipmentDetail,
   EquipmentSensor,
   EquipmentPmSchedule,
+  EquipmentHeaderSummary,
+  HeaderValue,
   EquipmentListFilter,
   EquipmentCreateRequest,
   EquipmentUpdateRequest,

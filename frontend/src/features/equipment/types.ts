@@ -39,6 +39,25 @@ export interface EquipmentSummary {
   pmOverdue?: boolean
 }
 
+/**
+ * 설비 상세 헤더 값의 비동기 상태 — 로딩/실패를 '0' 이나 '-' 로 뭉개지 않고 구분해서 표시하기 위한 타입.
+ * (조합하는 쪽은 pages — equipment 가 sensor/alarm/inspection 을 직접 조회하면 도메인 경계 위반)
+ */
+export type HeaderValue<T> =
+  | { state: 'loading' }
+  | { state: 'error' }
+  | { state: 'ready'; value: T }
+
+/** 설비 상세 헤더에 주입하는 '센서 / 미해결 알람 / 다음 PM 예정' 값 (FR-2.4) */
+export interface EquipmentHeaderSummary {
+  /** '온도·진동·압력·전류 (4종)' 같은 요약 문자열 */
+  sensors: HeaderValue<string>
+  /** 미해결(OPEN+ACK) 알람 건수 */
+  openAlarmCount: HeaderValue<number>
+  /** 다음 PM 스케줄 — 스케줄이 없으면 ready 의 value 가 null ('미설정') */
+  nextPm: HeaderValue<{ nextDueAt: string; overdue: boolean; overdueDays: number } | null>
+}
+
 /** GET /equipments/{id} 응답에 포함되는 센서 정보 */
 export interface EquipmentSensor {
   id: number

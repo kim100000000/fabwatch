@@ -13,14 +13,14 @@ export interface PmSchedulesResult {
 
 /** GET /pm-schedules 훅 (단순 배열 응답) */
 export function usePmSchedules(
-  query: { overdueOnly?: boolean; equipmentId?: number | null } = {},
+  query: { overdueOnly?: boolean; equipmentId?: number | null; enabled?: boolean } = {},
 ): PmSchedulesResult {
-  const { overdueOnly, equipmentId } = query
+  const { overdueOnly, equipmentId, enabled } = query
   const fetcher = useCallback(
     (signal: AbortSignal): Promise<PmSchedule[]> => fetchPmSchedules({ overdueOnly, equipmentId }, signal),
     [overdueOnly, equipmentId],
   )
-  const { data, loading, error, refetch } = useApiQuery(fetcher)
+  const { data, loading, error, refetch } = useApiQuery(fetcher, { enabled })
   return { schedules: data ?? [], loading, error, refetch }
 }
 

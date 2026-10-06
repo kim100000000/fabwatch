@@ -1,4 +1,12 @@
-export { fetchAlarms, ackAlarm, resolveAlarm, createManualAlarm } from './api/alarmApi'
+export {
+  fetchAlarms,
+  fetchUnresolvedAlarmCount,
+  ackAlarm,
+  resolveAlarm,
+  createManualAlarm,
+} from './api/alarmApi'
+export { useUnresolvedAlarmCount } from './api/useUnresolvedAlarmCount'
+export type { UnresolvedAlarmCountResult } from './api/useUnresolvedAlarmCount'
 export { useAlarmList } from './api/useAlarmList'
 export type { AlarmListResult } from './api/useAlarmList'
 export { AlarmTable } from './components/AlarmTable'

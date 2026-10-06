@@ -6,7 +6,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -57,6 +61,33 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNoResource(NoResourceFoundException e) {
         return build(ErrorCode.NOT_FOUND, null);
+    }
+
+    /** 필수 쿼리 파라미터 누락 — 클라이언트 실수이므로 500이 아니라 400. */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> handleMissingParam(MissingServletRequestParameterException e) {
+        return build(ErrorCode.VALIDATION_ERROR, "필수 파라미터가 없습니다: " + e.getParameterName());
+    }
+
+    /** 허용되지 않는 HTTP 메서드 — 500이 아니라 405 (클라이언트 실수가 서버 오류로 보이지 않게). */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotAllowed(HttpRequestMethodNotSupportedException e) {
+        return build(ErrorCode.METHOD_NOT_ALLOWED, null);
+    }
+
+    /** 지원하지 않는 Content-Type — 415. */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleUnsupportedMediaType(HttpMediaTypeNotSupportedException e) {
+        return build(ErrorCode.UNSUPPORTED_MEDIA_TYPE, null);
+    }
+
+    /** 지원하지 않는 Accept — 406. */
+    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+    public ResponseEntity<ErrorResponse> handleNotAcceptable(HttpMediaTypeNotAcceptableException e) {
+        // Accept가 JSON이 아니면 오류 본문도 협상에 실패하므로 JSON으로 고정한다(본문이 비지 않게).
+        return ResponseEntity.status(ErrorCode.NOT_ACCEPTABLE.getStatus())
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .body(ErrorResponse.of(ErrorCode.NOT_ACCEPTABLE));
     }
 
     @ExceptionHandler(Exception.class)

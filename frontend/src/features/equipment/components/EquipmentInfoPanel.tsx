@@ -1,20 +1,32 @@
-import { formatKst, formatKstDate } from '@/shared/lib/datetime'
-import type { EquipmentDetail } from '../types'
+import type { ReactNode } from 'react'
+import { formatKstDate } from '@/shared/lib/datetime'
+import type { EquipmentDetail, EquipmentHeaderSummary, HeaderValue } from '../types'
 import './equipment.css'
 
 interface EquipmentInfoPanelProps {
   equipment: EquipmentDetail
+  /**
+   * 센서 / 미해결 알람 / 다음 PM 예정 — GET /equipments/{id} 는 기본정보만 주므로(도메인 경계 원칙)
+   * 페이지가 sensor·alarm·inspection 의 기존 API 를 조합해 주입한다 (FR-2.4).
+   */
+  summary: EquipmentHeaderSummary
+}
+
+/** 로딩 '…' / 실패 '확인 실패' / 성공 render — 로딩·실패를 0 이나 '-' 로 폴백하지 않는다 */
+function renderHeaderValue<T>(value: HeaderValue<T>, render: (value: T) => ReactNode): ReactNode {
+  if (value.state === 'loading') {
+    return (
+      <span className="info-value-muted" aria-busy="true" aria-label="불러오는 중">
+        …
+      </span>
+    )
+  }
+  if (value.state === 'error') return <span className="info-value-danger">확인 실패</span>
+  return render(value.value)
 }
 
 /** S-3 상단 설비 기본정보 — 시각은 전부 KST 변환 후 표시 */
-export function EquipmentInfoPanel({ equipment }: EquipmentInfoPanelProps) {
-  // 백엔드 EquipmentDetailResponse 는 아직 sensors/openAlarmCount/pmSchedule 을 내려주지 않는다.
-  // 이때 0 으로 폴백하면 "미해결 알람 0건" 옆에 알람 탭이 실제 알람을 띄우는 모순이 생기므로,
-  // "미제공(-)"과 "실제 0"을 구분해 표시한다. 필드가 추가되면 자동으로 숫자가 나온다.
-  const sensorCount = equipment.sensors?.length
-  const openAlarmCount = equipment.openAlarmCount
-  const nextDueAt = equipment.pmSchedule?.nextDueAt
-
+export function EquipmentInfoPanel({ equipment, summary }: EquipmentInfoPanelProps) {
   return (
     <dl className="detail-info">
       <div>
@@ -35,17 +47,28 @@ export function EquipmentInfoPanel({ equipment }: EquipmentInfoPanelProps) {
       </div>
       <div>
         <dt>센서</dt>
-        <dd>{sensorCount === undefined ? '-' : `${sensorCount}개`}</dd>
+        <dd>{renderHeaderValue(summary.sensors, (text) => text)}</dd>
       </div>
       <div>
         <dt>미해결 알람</dt>
-        <dd>{openAlarmCount === undefined ? '-' : `${openAlarmCount}건`}</dd>
+        <dd>
+          {renderHeaderValue(summary.openAlarmCount, (count) => (
+            <span className={count > 0 ? 'info-value-alert' : undefined}>{count}건</span>
+          ))}
+        </dd>
       </div>
       <div>
-        <dt>다음 PM 예정</dt>
-        <dd style={{ color: equipment.pmSchedule?.overdue ? 'var(--status-down)' : undefined }}>
-          {nextDueAt ? formatKst(nextDueAt) : '-'}
-          {equipment.pmSchedule?.overdue ? ' (OVERDUE)' : ''}
+        <dt>다음 PM 예정 (KST)</dt>
+        <dd>
+          {renderHeaderValue(summary.nextPm, (pm) => {
+            if (!pm) return <span className="info-value-muted">미설정</span>
+            if (!pm.overdue) return formatKstDate(pm.nextDueAt)
+            return (
+              <span className="info-value-danger">
+                {formatKstDate(pm.nextDueAt)} · {pm.overdueDays > 0 ? `${pm.overdueDays}일 경과` : 'OVERDUE'}
+              </span>
+            )
+          })}
         </dd>
       </div>
     </dl>

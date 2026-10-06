@@ -2,7 +2,7 @@
 
 > 버전 v1.0 / 2026-07-06
 > Base: `/api/v1` · 인증: `Authorization: Bearer {accessToken}` (auth 제외 전부)
-> 에러 공통: `{ "code": "ERROR_CODE", "message": "...", "timestamp": "..." }`
+> 에러 공통: `{ "code": "ERROR_CODE", "message": "...", "timestamp": "..." }` — 클라이언트 실수는 500이 아니라 해당 4xx로 내려간다: 400 `VALIDATION_ERROR`(형식·필수값·파싱 실패), 401 `UNAUTHORIZED`, 403 `FORBIDDEN`, 404 `NOT_FOUND`, 405 `METHOD_NOT_ALLOWED`, 406 `NOT_ACCEPTABLE`, 415 `UNSUPPORTED_MEDIA_TYPE`. (참고: 입력 검증이 권한 검사보다 먼저 평가되어, 권한 없는 사용자가 잘못된 본문을 보내면 403이 아니라 400이 나올 수 있다 — 본문에는 공개된 DTO 제약 메시지만 담긴다.)
 > 목록 공통: `?page=0&size=20&sort=...` → `{ content: [], totalElements, totalPages, number }`
 
 ## 1. 인증 /auth
@@ -12,6 +12,7 @@
 | POST | /auth/login | `{email, password}` → `{accessToken, refreshToken, user:{id,name,role}}` | 공개 |
 | POST | /auth/refresh | `{refreshToken}` → 새 토큰 쌍 | 공개 |
 | POST | /auth/logout | Refresh 무효화 | 로그인 |
+| GET | /users/lookup | 활성 사용자 경량 조회(점검 이력 작업자 필터용). **단순 배열**(PageResponse 아님), 이름순 → `[{id,name,role}]`. 이메일·비밀번호·토큰·잠금 상태는 응답에 없음. 비활성(`enabled=false`)·soft delete 사용자 제외. 현재 규모에선 전체 반환(`// SCALE:`). 토큰 없음 401 | 로그인(전체 역할) |
 | 에러 | | 401 `LOGIN_FAILED` / 429 `ACCOUNT_LOCKED` / 401 `TOKEN_EXPIRED` / 403 `USER_DISABLED` | |
 
 ## 2. 설비 /lines, /equipments
@@ -21,7 +22,7 @@
 | GET | /lines | 라인+공정+설비 트리 전체 | 전체 |
 | GET | /equipments | 목록 (filter: processId, status) | 전체 |
 | POST | /equipments | 설비 등록 | ADMIN |
-| GET | /equipments/{id} | 상세 (기본정보+센서+PM스케줄+미해결알람수) | 전체 |
+| GET | /equipments/{id} | 상세 (기본정보만). 센서·미해결 알람·다음 PM 예정은 서버가 합치지 않고 프론트가 기존 API(`/equipments/{id}/sensors`, `/alarms?equipmentId=&status=`, `/pm-schedules?equipmentId=`)를 조합한다 | 전체 |
 | PUT | /equipments/{id} | 수정 | ADMIN |
 | PATCH | /equipments/{id}/status | `{toStatus, reason}` 상태 전환. 400 `INVALID_STATUS_TRANSITION`. `DOWN→IDLE`·`DOWN→RUN`은 reason 필수(400 `VALIDATION_ERROR`). **권한: 기본 ENGINEER+, 단 `DOWN→IDLE`은 TECHNICIAN도 가능** (docs/03 F-2) | ENGINEER+ (DOWN→IDLE은 전체) |
 | GET | /equipments/{id}/status-logs | 상태 변경 이력 | 전체 |
@@ -29,7 +30,7 @@
 | GET | /equipments/kpi | `?period=&lineId=` → `{period, periodStart, periodEnd, summary:{mtbfHours, mttrMin, availability, downCount}, equipments:[{equipmentId, equipmentCode, equipmentName, mtbfHours, mttrMin, availability, downCount}]}`. `summary`는 **합산 후 재계산**(비율 평균 아님), 삭제된 설비 제외, 설비는 코드순. 없는 lineId 404. 리터럴 경로라 `/equipments/{id}`보다 우선 매칭 | 전체 |
 
 > 임계치 수정 API(`PUT .../sensors/{sensorId}/thresholds`)는 §3 센서 데이터로 이동(센서 소유 리소스라 sensor 도메인에 구현).
-> `GET /equipments/{id}` 상세는 2주차 기준 기본정보만 반환 — 센서/PM스케줄/미해결알람수 통합은 아직 미완료(memory.md 참고).
+> `GET /equipments/{id}` 상세는 기본정보만 반환한다. **센서/미해결 알람/다음 PM 예정은 프론트에서 기존 API를 조합한다(도메인 경계 원칙)** — equipment 도메인이 sensor·alarm·inspection에 직접 의존하면 "도메인 간 직접 참조 금지"(CLAUDE.md, docs/10 ADR-1) 위반이라 서버에서 합치지 않기로 결정했다. 조합 위치는 `EquipmentDetailPage`(pages).
 
 ## 3. 센서 데이터 /sensors
 
@@ -38,7 +39,7 @@
 | GET | /equipments/{id}/sensor-data/latest | 센서별 최신값 1건씩(카드용). `PageResponse` 래핑, 항목에 `warnLow/warnHigh/critLow/critHigh` 4값 동봉(기준선용) |
 | GET | /equipments/{id}/sensor-data | `?sensorType=&from=&to=` — 1시간 이내: 원본, 초과: 1분 집계 자동 선택. **`PageResponse`가 아니라 단일 객체**: `{equipmentId, granularity:"RAW"|"1M", from, to, series:[{sensorId, sensorType, unit, warnLow~critHigh, points:[{at, value, minValue, maxValue, sampleCount}]}]}`. point shape은 RAW/1M 공통(1M일 때 `at=bucket_at, value=avg_v`, min/max/sampleCount 채워짐) |
 | GET | /equipments/{id}/sensors | 설비 센서 목록(임계치 편집 화면 진입용). *(구현 시 추가, 최초 설계엔 없었음)* |
-| PUT | /equipments/{id}/sensors/{sensorId}/thresholds | 임계치 수정 `{warnLow,warnHigh,critLow,critHigh,reason}`(reason 필수) → 400 `INVALID_THRESHOLD_RANGE`. ADMIN 전용(ENGINEER 403) |
+| PUT | /equipments/{id}/sensors/{sensorId}/thresholds | 임계치 수정 `{warnLow,warnHigh,critLow,critHigh,reason}`(reason 필수·trim·300자). 4값은 각각 null 가능(해당 방향 미사용)하나 **전부 null이거나 키를 빠뜨리면 400 `INVALID_THRESHOLD_RANGE`**(센서 감시가 꺼지므로). 순서 위반도 `INVALID_THRESHOLD_RANGE`, 소수 3자리 이상·정수 8자리 초과는 400 `VALIDATION_ERROR`(DB decimal(10,2)). ADMIN 전용(ENGINEER 403), 변경 이력은 누가·언제·왜·이전→이후로 보존 |
 | GET | /equipments/{id}/sensors/{sensorId}/thresholds/logs | 임계치 변경 이력 `{oldWarn*,oldCrit*,newWarn*,newCrit*,reason,changedBy,changedByName,changedAt}`. *(구현 시 추가)* |
 | **SSE** | **GET /stream/sensors?token=&equipmentId=** | `text/event-stream`. 인증은 쿼리파라미터 `token`(SSE 한정, docs/11 §4). event: `sensor` `{sensorId, equipmentId, type, unit, value, measuredAt, level: NORMAL|WARNING|CRITICAL}`(`equipmentId`·`unit`은 카드 매칭/차트축용으로 추가) / event: `alarm` — REST `AlarmResponse`와 다른 shape, **식별자 키가 `id`가 아니라 `alarmId`**, ack/resolve 필드 없음 / event: `status` `{equipmentId, equipmentCode, fromStatus, toStatus, reason, changedBy, changedAt}`. equipmentId 생략 시 전체 라인 구독(메인 대시보드용). 30초 heartbeat(`:heartbeat` 주석) |
 

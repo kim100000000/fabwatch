@@ -72,7 +72,7 @@ public class SensorThresholdService {
                 .newWarnHigh(request.warnHigh())
                 .newCritLow(request.critLow())
                 .newCritHigh(request.critHigh())
-                .reason(request.reason())
+                .reason(request.reason().trim())
                 .changedBy(actorUserId)
                 .changedAt(Instant.now())
                 .build();
@@ -80,9 +80,10 @@ public class SensorThresholdService {
         sensor.updateThresholds(request.warnLow(), request.warnHigh(), request.critLow(), request.critHigh());
         thresholdLogRepository.save(history);
 
-        log.info("임계치 변경: sensorId={}, warn[{}~{}], crit[{}~{}], by={}, 사유={}",
+        // 사유는 사용자 자유 입력이라 로그에 남기지 않는다(변경 이력 테이블에 보존됨, 로그 인젝션 방지)
+        log.info("임계치 변경: sensorId={}, warn[{}~{}], crit[{}~{}], by={}",
                 sensor.getId(), request.warnLow(), request.warnHigh(),
-                request.critLow(), request.critHigh(), actorUserId, request.reason());
+                request.critLow(), request.critHigh(), actorUserId);
         return SensorResponse.from(sensor);
     }
 

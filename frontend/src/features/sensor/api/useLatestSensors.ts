@@ -4,7 +4,7 @@ import { toApiError } from '@/shared/api'
 import type { ApiError } from '@/shared/api'
 import { fetchLatestSensorData } from './sensorApi'
 import { compareSensorType } from '../types'
-import type { SensorEventPayload, SensorLatest } from '../types'
+import type { SensorEventPayload, SensorLatest, SensorThresholds } from '../types'
 
 export interface LatestSensorsResult {
   /** equipmentId → 센서별 최신값 (센서 종류 순서 고정) */
@@ -18,6 +18,11 @@ export interface LatestSensorsResult {
   reload: (signal?: AbortSignal) => Promise<Record<number, SensorLatest[]>>
   /** SSE `sensor` 이벤트를 카드/차트 값에 반영 */
   applySensorEvent: (payload: SensorEventPayload) => void
+  /**
+   * 임계치 수정 직후 해당 센서의 4값을 서버 응답 그대로 교체 (null 도 그대로 — '미설정'으로 바뀐 경계가
+   * 이전 값으로 되돌아가지 않게 한다). 다음 SSE 이벤트는 임계치를 건드리지 않고 값만 갱신한다.
+   */
+  applyThresholds: (equipmentId: number, sensorId: number, thresholds: SensorThresholds) => void
 }
 
 /**
@@ -113,5 +118,29 @@ export function useLatestSensors(equipmentIds: number[]): LatestSensorsResult {
     })
   }, [])
 
-  return { sensorsByEquipment, loading, error, reload, applySensorEvent }
+  const applyThresholds = useCallback(
+    (equipmentId: number, sensorId: number, thresholds: SensorThresholds) => {
+      setSensorsByEquipment((previous) => {
+        const sensors = previous[equipmentId]
+        if (!sensors) return previous
+        return {
+          ...previous,
+          [equipmentId]: sensors.map((sensor) =>
+            sensor.sensorId === sensorId
+              ? {
+                  ...sensor,
+                  warnLow: thresholds.warnLow ?? null,
+                  warnHigh: thresholds.warnHigh ?? null,
+                  critLow: thresholds.critLow ?? null,
+                  critHigh: thresholds.critHigh ?? null,
+                }
+              : sensor,
+          ),
+        }
+      })
+    },
+    [],
+  )
+
+  return { sensorsByEquipment, loading, error, reload, applySensorEvent, applyThresholds }
 }

@@ -105,12 +105,16 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 - [x] **QA**: HIGH 0 / MED 3 수정(KPI 첫 로딩 영구 로딩 버그, DRIFT 목표값, MTTR 힌트 보강). 리포트 `.claude/_workspace/qa/f5-kpi시뮬레이터_20261003.md`. 테스트 365→411, 프론트 build/lint 통과
 - [x] **README.md 작성** + 스크린샷 5장(`docs/screenshots/`): 현장 경험→기능 매핑, 아키텍처(mermaid), 실행 방법, 3분 시연, 트러블슈팅 6건, 한계. 배포 URL은 아직 없음(배포 전)
 - [x] 라이브 데모 환경 정리(로컬 DB): 미해결 알람 해제·설비 RUN 복귀·시나리오 해제 → 바로 시연 가능한 상태
+- [x] **개발 마무리 3건 (2026-10-06)**: ① 설비 상세 헤더(센서/미해결 알람/다음 PM)를 프론트에서 기존 API 조합으로 채움(equipment가 sensor/alarm/inspection에 의존하지 않도록 서버 합산 대신 조합 — docs/06 기록) ② 임계치 편집 화면(설비 상세 센서 탭, ADMIN 전용·사유 필수·변경 이력·클라이언트 검증=서버 규칙) ③ 점검 이력 작업자 필터(`GET /users/lookup`: id·이름·역할만, 이메일 미노출)
+- [x] **최종 점검(체크리스트)**: 에러 응답 포맷 전 경로 통일 확인 — 405/415가 500으로 나오던 결함 수정(406 포함, JSON 강제), 비밀키 히스토리 점검 clean, `// TENANT:` 확인, NFR-1 실측(SSE 지연 중앙값 32ms)
+- [x] **QA(임계치·헤더·필터)**: HIGH 0 / MED 4 수정 — 서버가 소수 3자리·정수 8자리 초과를 안 막던 것(@Digits), 4값 전부 비우면 센서 감시가 꺼지던 것(서버+프론트 차단), Modal 포커스 트랩·제출 중 닫기 방지, docs/14 에러코드 색인. **범위 밖 발견 X-1**: application.yml이 AiProperties 기본값(4096/60초)을 2000/30초로 덮어써 F-6 QA H-1 수정이 무효였음 → yml 정정 + yml 바인딩 검증 테스트 추가(기본값만 보던 테스트가 못 잡은 것). 테스트 411→434. 리포트 `.claude/_workspace/qa/f2f3-임계치헤더작업자필터_20261006.md`
 
 ### 남음
-- [ ] **실 Claude API 호출 검증** (ANTHROPIC_API_KEY 필요, `AI_PROVIDER=claude`): 응답 형식·토큰·지연(60초 내)·effort low 품질 확인. 문제 시 AI_MAX_TOKENS 상향/effort 조정
+- [ ] **실 Claude API 호출 검증** (ANTHROPIC_API_KEY 필요, `AI_PROVIDER=claude`): 응답 형식·토큰·지연(60초 내)·effort low 품질 확인. (yml 기본값 정정 후 처음 실제 값 4096/60이 적용되는 상태)
 - [ ] **배포(Railway 백+DB, Vercel 프론트)** — 사용자 계정/외부 공개 필요. 저장소 준비(Dockerfile/설정/환경변수/CORS/application-prod) → 사용자 확인 후 실배포 → 스모크
-- [ ] 포트폴리오 마무리: 이력서용 3줄 설명, 시연 GIF/영상(선택), 배포 URL을 README에 반영, 지인 1명 3분 테스트
-- [ ] 여유분: 임계치 편집 화면(FR-2.3), 교대 인수인계 요약(FR-6.5, Should)
+- [ ] 포트폴리오 마무리: 이력서용 3줄 설명, 시연 GIF/영상(선택), 배포 URL을 README에 반영, 지인 1명 3분 테스트, 태블릿 폭 실확인(코드 기준 확인만 됨)
+- [ ] 여유분(Should): 사용자 등록/비활성화(FR-1.3), 교대 인수인계 요약(FR-6.5)
+- [ ] **로컬 DB 정리 필요**: `sensor_threshold_logs`에 UI 검증용 테스트 이력 4건(id 1~4, 사유 "UI 검증용…")이 남아 있음 — 삭제 시도가 권한 규칙에 막혀 못 지움. 시연 전에 사용자가 직접 삭제: `docker exec fabwatch-mysql mysql -ufabwatch -pfabwatch_local fabwatch -e "delete from sensor_threshold_logs where id in (1,2,3,4)"`
 
 ## 5. 다음 작업 지시 (그대로 실행 가능)
 
@@ -118,6 +122,12 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 다음: 4주차 남은 것 — (1) 배포 준비·실배포(사용자 확인 필요: Railway/Vercel 계정, 공개 URL), (2) 이력서 3줄·시연 GIF, (3) 실 Claude 호출 검증(키 준비 시 최우선).
    배포 준비는 저장소 쪽만 먼저 가능: backend Dockerfile, application-prod.yml(환경변수 주입, ddl-auto 정책, CORS 허용 오리진), vercel.json(SPA 라우팅·API 베이스 URL), docs/13 절차 점검.
    배포 환경 주의: JWT_SECRET 필수 고정(미설정 시 재시작마다 로그인 풀림), SSE 프록시/타임아웃, AI 쿼터·키는 환경변수, 시드 계정 비밀번호는 데모용임을 README에 명시, MySQL @Lob 길이 이슈는 해결됨.
+
+임계치/헤더/필터 후속(QA LOW 이월):
+   - 권한 없는 사용자가 잘못된 본문을 보내면 403 대신 400이 먼저 나옴(@Valid가 @PreAuthorize보다 먼저). 보안 위험 낮음(공개 제약 메시지뿐). 완화: 변경성 엔드포인트를 SecurityConfig URL 규칙으로도 차단 + 최저 권한 역할 403 테스트
+   - 임계치 편집 다이얼로그가 오래된 값으로 초기화될 수 있고 서버에 동시 편집 방어 없음(last-write-wins). 진행 중 DRIFT는 주입 당시 목표값 유지, 열린 알람은 임계치를 완화해도 자동 해소되지 않음(문서화 필요)
+   - 405 응답에 Allow 헤더 없음, 필수 파라미터 누락 400 핸들러는 도달 불가·무테스트, ConstraintViolationException 메시지 원문 노출, 설비 전환 시 헤더 값 잔존, 센서 목록 중복 호출, equipment↔sensor/alarm/inspection/aireport 순환(EquipmentDetailTabs, 기존 구조), docs/04 S-8이 임계치를 /admin에 두는 서술과 실제(S-3 센서 탭) 불일치
+   - 백엔드가 같은 build 폴더를 동시에 쓰면 `Could not write XML test results`로 테스트가 실패함 — 에이전트 병렬 작업 시 gradle 테스트는 한 번에 하나만
 
 KPI 후속(QA LOW/MED 이월):
    - K-1: 기간 시작 전 진입해 계속 DOWN인 설비는 'DOWN 0회·MTBF 고장 없음·가동률 0%'로 표시됨(스펙대로이나 모순으로 읽힘). ongoingDown/completedDownCount 필드 추가 검토
@@ -152,6 +162,7 @@ F-3 이월/후속 (우선순위 순):
 
 | 날짜 | 작업 | 결과/결정 |
 |---|---|---|
+| 2026-10-06 | **개발 마무리: 설비 상세 헤더·임계치 편집 화면·작업자 필터 + 최종 점검** (하네스: backend/frontend 병렬 → mes-qa → 수정 → 라이브 검증) | FR-2.3/2.4/3.5 완료(체크리스트 Must 미완 항목 해소), /users/lookup, 405·415·406 핸들러, 임계치 자릿수·전부 비우기 차단, Modal 접근성. 최종 점검: 에러 포맷 전 경로 통일, 비밀키 clean, NFR-1 실측 32ms. QA에서 범위 밖 X-1 발견(yml이 AI 기본값 덮어씀 → F-6 수정 무효였음)→정정·바인딩 테스트. 테스트 411→434. 에이전트가 만든 임계치 테스트 이력 4건은 권한 규칙으로 삭제 못 해 남아 있음(사용자 정리 필요) |
 | 2026-10-03 | **4주차 KPI + 시뮬레이터 개선 + README/스크린샷** (하네스: backend/frontend 병렬 → mes-qa → 수정 → 라이브 검증) | KPI(가동률/MTBF/MTTR, KST 절삭·합산 재계산)·설비 상세/대시보드 위젯, DRIFT plateau(crit+1σ)+데모 2분(실측 경고 52초→자동 DOWN 100~109초). 테스트 365→411. QA HIGH 0, MED 3 수정, 손계산 3건 실DB 일치. 라이브에서 확인: 숨김 탭은 폴링 중지(설계), 세션은 curl 로그인이 refresh token을 교체해 브라우저 세션을 끊을 수 있음(사용자당 1개 저장). README.md+스크린샷 5장 작성. 데모 환경 정리 후 커밋. 배포·이력서 3줄·실Claude 호출 검증은 남음 |
 | 2026-10-03 | **3주차 F-6 AI 리포트** (하네스: backend/frontend 병렬 → mes-qa → 수정 2개 병렬 → 라이브 검증) | aireport 도메인(비동기 202, 쿼터, 호출 로그, 키 마스킹, 인젝션 방어, 확정본 불변), S-7+설비 리포트 탭+생성 진입점. 테스트 235→365, 프론트 build/lint 통과. QA에서 HIGH 1(Sonnet 5.5가 thinking 기본 ON이라 max_tokens 2000으론 본문 빈/잘림 위험 — claude-api 스킬로 사양 확인 후 effort low+max_tokens 4096+타임아웃 60초로 수정), MED 5(키 개행 시 로그 노출 경로, 간헐 401=테스트 H2 공유, 확정 레이스, 알람/점검 경로 중복 생성, docs/11 권한표) 수정. 실MySQL+브라우저 라이브 확인은 AI_PROVIDER=mock 기준. **실 Claude 호출은 API 키 없어 미검증**. 리포트: `.claude/_workspace/qa/f6-ai리포트_20261003.md` |
 | 2026-10-02 | **3주차 F-3 점검 이력 + PM 스케줄 + 알람 이력 가시화** (하네스: backend-dev/frontend-dev 병렬 → mes-qa → 라이브 검증·수정) | 점검 이력 CRUD·승인·체크리스트·PM 스케줄·PM 지연 알람(이벤트)·BM→알람 자동 해제, S-4/S-5/점검탭/OVERDUE 배지/알람 해제사유 표시. 테스트 156→235, 프론트 build/lint 통과. QA HIGH 0, MED 2 수정. 실MySQL 라이브 확인 중 PM 등록 후 PM_OVERDUE 알람 잔존 결함 발견→자동 해소로 수정. 이월: BM 연결 강제, 작업자 필터, 템플릿 관리 UI, 시드 PM 스케줄 재설정. 리포트: `.claude/_workspace/qa/f3-점검이력_20261002.md` |

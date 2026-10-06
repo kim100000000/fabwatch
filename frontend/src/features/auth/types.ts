@@ -31,3 +31,13 @@ export const ROLE_LABEL: Record<UserRole, string> = {
   ENGINEER: '엔지니어',
   TECHNICIAN: '테크니션',
 }
+
+/**
+ * GET /users/lookup 항목 — 작업자 필터 등 '이름으로 사용자를 고르는' 화면용 최소 정보.
+ * 이메일 등 개인정보는 내려오지 않는다. 이름순 단순 배열, 로그인한 전체 역할이 조회 가능.
+ */
+export interface UserLookupItem {
+  id: number
+  name: string
+  role: UserRole
+}

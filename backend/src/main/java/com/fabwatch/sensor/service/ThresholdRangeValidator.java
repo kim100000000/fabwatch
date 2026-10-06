@@ -18,6 +18,11 @@ public final class ThresholdRangeValidator {
     }
 
     public static void validate(BigDecimal warnLow, BigDecimal warnHigh, BigDecimal critLow, BigDecimal critHigh) {
+        // 4값을 전부 비우면 해당 센서의 알람 판정이 조용히 꺼진다(요청 본문에서 키를 빠뜨려도 동일) → 최소 1개는 필요
+        if (warnLow == null && warnHigh == null && critLow == null && critHigh == null) {
+            throw new BusinessException(ErrorCode.INVALID_THRESHOLD_RANGE,
+                    "임계치를 최소 1개 이상 설정해야 합니다. 전부 비우면 센서 감시가 꺼집니다.");
+        }
         // 하한 쌍: crit_low ≤ warn_low
         requireLessOrEqual(critLow, warnLow, "crit_low ≤ warn_low");
         // 상한 쌍: warn_high ≤ crit_high

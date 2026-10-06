@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useAuth } from '@/app/providers/useAuth'
 import type { EquipmentSensor } from '@/features/equipment'
 import { EmptyState, ErrorState, LoadingBlock, StreamStatusBadge } from '@/shared/ui'
+import { useEquipmentSensors } from '../api/useEquipmentSensors'
 import { useLatestSensors } from '../api/useLatestSensors'
 import { useSensorStream } from '../api/useSensorStream'
-import { LIVE_MAX_POINTS, LIVE_WINDOW_MINUTES, compareSensorType } from '../types'
-import type { LivePoint, SensorEventPayload, SensorLatest } from '../types'
+import { LIVE_MAX_POINTS, LIVE_WINDOW_MINUTES, SENSOR_TYPE_LABEL, compareSensorType } from '../types'
+import type { LivePoint, SensorDefinition, SensorEventPayload, SensorLatest } from '../types'
 import { SensorLiveChart } from './SensorLiveChart'
 import { SensorHistoryChart } from './SensorHistoryChart'
+import { ThresholdEditDialog } from './ThresholdEditDialog'
+import { ThresholdHistoryDialog } from './ThresholdHistoryDialog'
 import './sensor.css'
 
 interface SensorTabPanelProps {
@@ -36,11 +40,25 @@ function toSensorLatest(sensor: EquipmentSensor, equipmentId: number): SensorLat
  * - 상단: 센서별 실시간 차트 2×2 (SSE 수신, 최근 5분 / 최대 150포인트 슬라이딩)
  * - 하단: 기간 선택 이력 차트 (1시간/24시간/7일, RAW/1M 은 서버 판단)
  * SSE 연결은 이 컴포넌트에서 1개만 열고 차트들에 값을 나눠 준다(차트마다 연결하지 않는다).
+ * 각 센서 카드에는 임계치 버튼이 붙는다 (FR-2.3): ADMIN=[임계치 설정] 다이얼로그, 그 외 역할=[임계치 이력] 조회 전용.
  */
 export function SensorTabPanel({ equipmentId, sensors }: SensorTabPanelProps) {
+  const { user } = useAuth()
+  // 임계치 수정은 ADMIN 전용 (docs/06 §3) — 서버도 ENGINEER/TECHNICIAN 을 403 으로 막는다
+  const canEditThreshold = user?.role === 'ADMIN'
+
   const equipmentIds = useMemo(() => [equipmentId], [equipmentId])
-  const { sensorsByEquipment, loading, error, reload, applySensorEvent } =
+  const { sensorsByEquipment, loading, error, reload, applySensorEvent, applyThresholds } =
     useLatestSensors(equipmentIds)
+
+  // 정상 기준값(baseValue)은 latest 응답에 없어 센서 정의 목록에서 가져온다 — 편집 다이얼로그 참고 표시용이라 ADMIN 만 조회
+  const { sensors: definitions } = useEquipmentSensors(equipmentId, { enabled: canEditThreshold })
+  const baseValueOf = (sensorId: number): number | null | undefined =>
+    definitions?.find((definition) => definition.sensorId === sensorId)?.baseValue
+
+  // 임계치 다이얼로그 대상 (센서 id + 모드). 값은 렌더 시점의 mergedSensors 에서 찾아 항상 최신을 보여준다
+  const [thresholdTarget, setThresholdTarget] = useState<{ sensorId: number; mode: 'edit' | 'history' } | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   // 실시간 포인트: sensorId → 최근 5분 슬라이딩 배열
   const [livePoints, setLivePoints] = useState<Record<number, LivePoint[]>>({})
@@ -120,11 +138,12 @@ export function SensorTabPanel({ equipmentId, sensors }: SensorTabPanelProps) {
           value: latest.value ?? detail.value,
           measuredAt: latest.measuredAt ?? detail.measuredAt,
           level: latest.level,
-          // 임계치가 latest 에도 실려 오면 그쪽을 신뢰 (임계치 수정 직후 반영)
-          warnLow: latest.warnLow ?? detail.warnLow,
-          warnHigh: latest.warnHigh ?? detail.warnHigh,
-          critLow: latest.critLow ?? detail.critLow,
-          critHigh: latest.critHigh ?? detail.critHigh,
+          // 임계치는 latest 가 단일 출처 — null 은 '미설정'이라는 값이므로 ?? 로 상세의 옛 값으로 되돌리지 않는다.
+          // (임계치 수정 직후 경계를 비웠을 때 이전 값이 되살아나는 것을 막는다. 키 자체가 없을 때만 상세 값 사용)
+          warnLow: latest.warnLow !== undefined ? latest.warnLow : detail.warnLow,
+          warnHigh: latest.warnHigh !== undefined ? latest.warnHigh : detail.warnHigh,
+          critLow: latest.critLow !== undefined ? latest.critLow : detail.critLow,
+          critHigh: latest.critHigh !== undefined ? latest.critHigh : detail.critHigh,
         }
       })
       .sort((a, b) => compareSensorType(a.sensorType, b.sensorType))
@@ -148,8 +167,29 @@ export function SensorTabPanel({ equipmentId, sensors }: SensorTabPanelProps) {
     )
   }
 
+  const target = thresholdTarget
+    ? mergedSensors.find((sensor) => sensor.sensorId === thresholdTarget.sensorId) ?? null
+    : null
+
+  const handleSaved = (updated: SensorDefinition) => {
+    // 서버 응답으로 카드·실시간/이력 차트의 기준선을 즉시 갱신 (merged 가 latest 를 따른다)
+    applyThresholds(equipmentId, updated.sensorId, updated)
+    const label = SENSOR_TYPE_LABEL[updated.sensorType] ?? updated.sensorType
+    setNotice(`${label} 임계치를 변경했습니다. 알람 판정에 즉시 반영되며, 변경자·사유가 이력에 기록되었습니다.`)
+    setThresholdTarget(null)
+  }
+
   return (
     <div>
+      {notice && (
+        <p className="form-notice" role="status">
+          {notice}
+          <button type="button" onClick={() => setNotice(null)} aria-label="알림 닫기">
+            ✕
+          </button>
+        </p>
+      )}
+
       <div className="equipment-toolbar">
         <StreamStatusBadge state={stream} />
         <span className="field-hint">
@@ -164,11 +204,44 @@ export function SensorTabPanel({ equipmentId, sensors }: SensorTabPanelProps) {
             sensor={sensor}
             points={livePoints[sensor.sensorId] ?? []}
             flash={flashSensorId === sensor.sensorId}
+            headerActions={
+              <button
+                type="button"
+                className="btn btn-sm"
+                aria-label={`${SENSOR_TYPE_LABEL[sensor.sensorType] ?? sensor.sensorType} ${canEditThreshold ? '임계치 설정' : '임계치 변경 이력'}`}
+                onClick={() => {
+                  setNotice(null)
+                  setThresholdTarget({ sensorId: sensor.sensorId, mode: canEditThreshold ? 'edit' : 'history' })
+                }}
+              >
+                {canEditThreshold ? '임계치 설정' : '임계치 이력'}
+              </button>
+            }
           />
         ))}
       </div>
 
       <SensorHistoryChart equipmentId={equipmentId} sensors={mergedSensors} />
+
+      {target && thresholdTarget?.mode === 'edit' && canEditThreshold && (
+        <ThresholdEditDialog
+          key={target.sensorId}
+          equipmentId={equipmentId}
+          sensor={target}
+          baseValue={baseValueOf(target.sensorId)}
+          onClose={() => setThresholdTarget(null)}
+          onSaved={handleSaved}
+        />
+      )}
+
+      {target && thresholdTarget?.mode === 'history' && (
+        <ThresholdHistoryDialog
+          key={target.sensorId}
+          equipmentId={equipmentId}
+          sensor={target}
+          onClose={() => setThresholdTarget(null)}
+        />
+      )}
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { ReactNode } from 'react'
 import {
   CartesianGrid,
   Line,
@@ -21,6 +22,8 @@ interface SensorLiveChartProps {
   points: LivePoint[]
   /** 방금 값이 갱신됐는지 (임계치 초과 시 1회 깜빡임) */
   flash?: boolean
+  /** 차트 헤더 아래 조치 영역 슬롯 (임계치 설정/이력 버튼 등 — 역할별 노출 판단은 호출부) */
+  headerActions?: ReactNode
 }
 
 /** null/undefined 를 제외한 임계치만 모은다 */
@@ -46,7 +49,7 @@ function thresholdEntries(sensor: SensorLatest): { value: number; kind: 'warn' |
  * - 라인 색 --accent, warn 점선 --alarm-warning, crit 점선 --alarm-critical
  * - SSE 구독은 부모(SensorTabPanel)가 1개 연결로 처리하고 여기는 표시만 한다.
  */
-export function SensorLiveChart({ sensor, points, flash = false }: SensorLiveChartProps) {
+export function SensorLiveChart({ sensor, points, flash = false, headerActions }: SensorLiveChartProps) {
   const tokens = useChartTokens()
   const thresholds = useMemo(() => thresholdEntries(sensor), [sensor])
 
@@ -77,13 +80,16 @@ export function SensorLiveChart({ sensor, points, flash = false }: SensorLiveCha
         </span>
       </div>
 
-      {thresholds.length > 0 && (
-        <div className="sensor-threshold-legend">
-          {thresholds.map((item) => (
-            <span key={item.label} className={item.kind}>
-              {item.label} {item.value}
-            </span>
-          ))}
+      {(thresholds.length > 0 || headerActions) && (
+        <div className="sensor-chart-sub">
+          <div className="sensor-threshold-legend">
+            {thresholds.map((item) => (
+              <span key={item.label} className={item.kind}>
+                {item.label} {item.value}
+              </span>
+            ))}
+          </div>
+          {headerActions && <div className="sensor-chart-actions">{headerActions}</div>}
         </div>
       )}
 

@@ -45,3 +45,18 @@ export async function createManualAlarm(request: ManualAlarmRequest): Promise<Al
   const { data } = await apiClient.post<Alarm>('/alarms/manual', request)
   return data
 }
+
+/**
+ * 설비의 미해결(OPEN + ACK) 알람 건수 — totalElements 만 쓰므로 size=1 로 두 번 조회해 합친다.
+ * 알람 목록 API 의 status 는 단일 값이라 상태별로 나눠 병렬 조회한다 (설비 상세 헤더용).
+ */
+export async function fetchUnresolvedAlarmCount(
+  equipmentId: number,
+  signal?: AbortSignal,
+): Promise<number> {
+  const [open, ack] = await Promise.all([
+    fetchAlarms({ equipmentId, status: 'OPEN', size: 1 }, signal),
+    fetchAlarms({ equipmentId, status: 'ACK', size: 1 }, signal),
+  ])
+  return open.totalElements + ack.totalElements
+}

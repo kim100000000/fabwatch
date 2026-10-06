@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/app/providers/useAuth'
 import { InspectionReportButton } from '@/features/aireport'
+import { useUserLookup } from '@/features/auth'
 import { useEquipmentList } from '@/features/equipment'
 import {
   EMPTY_INSPECTION_FILTER,
@@ -40,13 +41,15 @@ export function InspectionListPage() {
   )
 
   const { equipments } = useEquipmentList({ size: 100 })
+  // 작업자 셀렉트용 사용자 목록 — 실패해도 셀렉트만 비활성화되고 나머지 필터는 동작한다
+  const workerLookup = useUserLookup()
 
   const listFilter = useMemo(
     () => ({
       equipmentId: filter.equipmentId,
       type: filter.type,
       shift: filter.shift,
-      workerId: filter.mineOnly ? (user?.id ?? null) : null,
+      workerId: filter.workerId,
       // NG 포함만 — 해제 상태일 때는 파라미터 자체를 보내지 않는다 (false 를 보내면 'NG 없음' 만 걸린다)
       hasNg: filter.hasNg ? true : null,
       from: kstDateToUtcIso(filter.fromDate, 'start') ?? null,
@@ -54,7 +57,7 @@ export function InspectionListPage() {
       page,
       size: 20,
     }),
-    [filter, page, user?.id],
+    [filter, page],
   )
 
   const { inspections, loading, error, totalElements, totalPages, page: currentPage, refetch } =
@@ -95,7 +98,13 @@ export function InspectionListPage() {
         </p>
       )}
 
-      <InspectionFilterBar value={filter} onChange={handleFilterChange} equipments={equipments} />
+      <InspectionFilterBar
+        value={filter}
+        onChange={handleFilterChange}
+        equipments={equipments}
+        workers={workerLookup}
+        currentUserId={user?.id ?? null}
+      />
 
       {loading && inspections.length === 0 && <LoadingBlock label="점검 이력을 불러오는 중…" />}
 

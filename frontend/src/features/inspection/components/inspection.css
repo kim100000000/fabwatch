@@ -372,3 +372,28 @@
   font-size: inherit;
   text-decoration: underline;
 }
+
+/* ---------- 작업자 필터 (FR-3.5) ---------- */
+.inspection-filter .worker-field {
+  min-width: 200px;
+}
+
+.worker-field-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.worker-field-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+.worker-retry {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-decoration: underline;
+  cursor: pointer;
+}

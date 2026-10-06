@@ -128,7 +128,7 @@ export function EquipmentStatusDialog({ equipment, onClose, onChanged }: Equipme
           />
           {reasonMissing && (
             <p className="field-hint" role="alert">
-              DOWN (BM) 에서 {statusLabel(toStatus)} 로 전환하려면 조치 사유를 입력해야 합니다.
+              {statusLabel('DOWN')} 에서 {statusLabel(toStatus)} 로 전환하려면 조치 사유를 입력해야 합니다.
             </p>
           )}
         </div>
