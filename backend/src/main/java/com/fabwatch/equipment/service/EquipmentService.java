@@ -5,7 +5,10 @@ import com.fabwatch.common.dto.PageResponse;
 import com.fabwatch.common.event.EquipmentStatusChangedEvent;
 import com.fabwatch.common.exception.BusinessException;
 import com.fabwatch.common.exception.ErrorCode;
+import com.fabwatch.common.util.LogSanitizer;
 import com.fabwatch.common.util.Lookup;
+import com.fabwatch.common.util.PageableUtil;
+import com.fabwatch.common.util.TextUtil;
 import com.fabwatch.equipment.dto.EquipmentCreateRequest;
 import com.fabwatch.equipment.dto.EquipmentDetailResponse;
 import com.fabwatch.equipment.dto.EquipmentStatusChangeRequest;
@@ -36,6 +39,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * 설비 마스터 서비스 (docs/03 F-2, docs/06 §2).
@@ -47,6 +51,10 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class EquipmentService {
 
+    /** equipment_status_logs.reason 컬럼 길이 (varchar 200) */
+    private static final int STATUS_REASON_MAX_LENGTH = 200;
+    /** GET /equipments 정렬 허용 속성 (그 밖의 sort는 400) */
+    private static final Set<String> EQUIPMENT_SORTABLE = Set.of("code", "name", "status", "modelName", "maker", "installedAt");
     private static final String ROLE_ADMIN = "ADMIN";
     private static final String ROLE_ENGINEER = "ENGINEER";
 
@@ -91,7 +99,8 @@ public class EquipmentService {
     /** GET /equipments — 목록 (filter: processId, status) */
     @Transactional(readOnly = true)
     public PageResponse<EquipmentSummaryResponse> getEquipments(Long processId, EquipmentStatus status, Pageable pageable) {
-        Page<Equipment> page = equipmentRepository.findAll(EquipmentSpecifications.filter(processId, status), pageable);
+        Page<Equipment> page = equipmentRepository.findAll(EquipmentSpecifications.filter(processId, status),
+                PageableUtil.allowSort(pageable, EQUIPMENT_SORTABLE));
         Map<Long, String> managerNames = userQueryService.findNamesByIds(
                 page.getContent().stream().map(Equipment::getManagerId).filter(Objects::nonNull).toList());
         return PageResponse.of(page, e -> EquipmentSummaryResponse.from(e, Lookup.get(managerNames, e.getManagerId())));
@@ -158,7 +167,8 @@ public class EquipmentService {
     @Transactional
     public EquipmentDetailResponse changeStatus(Long id, EquipmentStatusChangeRequest request,
                                                 Long actorUserId, String actorRole) {
-        Equipment equipment = findEquipment(id);
+        // 행 락을 잡은 뒤의 최신 상태로 전이를 판정한다 — 동시 자동 DOWN과 엇갈려 로그가 어긋나는 것을 막는다 (M-1)
+        Equipment equipment = findEquipmentForUpdate(id);
         EquipmentStatus to = request.toStatus();
         validateManualChange(equipment, to, request.reason(), actorRole);
 
@@ -166,7 +176,7 @@ public class EquipmentService {
         Instant changedAt = Instant.now();
         statusLogRepository.save(new EquipmentStatusLog(
                 equipment, from, to, request.reason(), actorUserId, changedAt));
-        log.info("설비 상태 전환: code={}, {} → {}, 사유={}", equipment.getCode(), from, to, request.reason());
+        log.info("설비 상태 전환: code={}, {} → {}, 사유={}", equipment.getCode(), from, to, LogSanitizer.clean(request.reason()));
         publishStatusChanged(equipment, from, request.reason(), actorUserId, changedAt);
         return EquipmentDetailResponse.from(equipment, managerName(equipment.getManagerId()));
     }
@@ -211,7 +221,8 @@ public class EquipmentService {
      */
     @Transactional
     public boolean autoDown(Long equipmentId, String reason, Instant occurredAt) {
-        Equipment equipment = equipmentRepository.findById(equipmentId).orElse(null);
+        // 락 이후의 최신 상태로 판정 — 틱이 오래된 스냅샷으로 RUN→DOWN을 판단하는 사이 사용자가 바꿔도 안전하다 (M-1)
+        Equipment equipment = equipmentRepository.findByIdForUpdate(equipmentId).orElse(null);
         if (equipment == null) {
             log.warn("자동 DOWN 대상 설비 없음: id={}", equipmentId);
             return false;
@@ -221,11 +232,18 @@ public class EquipmentService {
             log.info("자동 DOWN 생략: code={}, 현재 상태={} (허용 전이 아님)", equipment.getCode(), from);
             return false;
         }
+        // 알람 메시지(최대 300자)가 붙은 사유는 status_log.reason(varchar 200)을 넘을 수 있다.
+        // 그대로 저장하면 INSERT 실패 → 알람 생성 트랜잭션 전체가 롤백되므로 저장 직전에 자른다.
+        // 알람 발생 시각은 사유 끝에 붙인다(잘려도 시각은 남도록 본문을 먼저 자른다). changedAt은 전환이 일어난 지금이다 —
+        // 알람 발생 시각을 쓰면 락 대기 중 먼저 커밋된 수동 전환 로그보다 시각이 앞서 KPI 순서가 뒤집힌다.
+        String occurredSuffix = occurredAt == null ? "" : " [알람 발생 " + occurredAt + "]";
+        String baseReason = reason == null ? "" : reason;
+        reason = TextUtil.truncate(baseReason, Math.max(0, STATUS_REASON_MAX_LENGTH - occurredSuffix.length())) + occurredSuffix;
         equipment.changeStatus(EquipmentStatus.DOWN);
-        Instant changedAt = occurredAt != null ? occurredAt : Instant.now();
+        Instant changedAt = Instant.now();
         // changedBy = null → 시스템 자동 전환 (사람이 누른 것이 아님을 이력에 남긴다)
         statusLogRepository.save(new EquipmentStatusLog(equipment, from, EquipmentStatus.DOWN, reason, null, changedAt));
-        log.warn("CRITICAL 알람 자동 DOWN: code={}, {} → DOWN, 사유={}", equipment.getCode(), from, reason);
+        log.warn("CRITICAL 알람 자동 DOWN: code={}, {} → DOWN, 사유={}", equipment.getCode(), from, LogSanitizer.clean(reason));
         publishStatusChanged(equipment, from, reason, null, changedAt);
         return true;
     }
@@ -242,7 +260,8 @@ public class EquipmentService {
     @Transactional(readOnly = true)
     public PageResponse<EquipmentStatusLogResponse> getStatusLogs(Long id, Pageable pageable) {
         findEquipment(id); // 존재하지 않는 설비면 404
-        Page<EquipmentStatusLog> page = statusLogRepository.findByEquipmentIdOrderByChangedAtDesc(id, pageable);
+        // 정렬은 최신순 고정 — 클라이언트 sort는 무시(?sort=foo가 500이 되지 않게)
+        Page<EquipmentStatusLog> page = statusLogRepository.findByEquipmentIdOrderByChangedAtDesc(id, PageableUtil.ignoreSort(pageable));
         Map<Long, String> names = userQueryService.findNamesByIds(
                 page.getContent().stream().map(EquipmentStatusLog::getChangedBy).filter(Objects::nonNull).toList());
         // 자동 DOWN(시스템 전환)은 changed_by가 null이다 — 불변 맵의 get(null) NPE 방지
@@ -252,6 +271,12 @@ public class EquipmentService {
 
     private Equipment findEquipment(Long id) {
         return equipmentRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "설비를 찾을 수 없습니다: id=" + id));
+    }
+
+    /** 상태 전환 전용 — 행 락 조회. 반드시 @Transactional 안에서 호출한다. */
+    private Equipment findEquipmentForUpdate(Long id) {
+        return equipmentRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "설비를 찾을 수 없습니다: id=" + id));
     }
 

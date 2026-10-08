@@ -481,4 +481,117 @@ class InspectionServiceTest {
         assertCode(() -> service.update(404L, update(null), WORKER_ID, "ADMIN"), ErrorCode.NOT_FOUND);
         assertCode(() -> service.review(404L, WORKER_ID), ErrorCode.NOT_FOUND);
     }
+
+    // ------------------------------------------------------------ PM 이력 수정 → 스케줄 재계산 (안정성 감사 M-11)
+
+    private Inspection existingPm(Instant endedAt) {
+        Inspection inspection = Inspection.builder().equipmentId(EQUIPMENT_ID).type(Inspection.Type.PM)
+                .shift(Inspection.Shift.D).workerId(WORKER_ID).startedAt(endedAt.minus(2, ChronoUnit.HOURS))
+                .endedAt(endedAt).durationMin(120).content("PM").build();
+        ReflectionTestUtils.setField(inspection, "id", 100L);
+        given(inspectionRepository.findById(100L)).willReturn(Optional.of(inspection));
+        return inspection;
+    }
+
+    private InspectionUpdateRequest updateEnded(Instant newEndedAt) {
+        return new InspectionUpdateRequest(null, newEndedAt.minus(2, ChronoUnit.HOURS), newEndedAt, "수정", null, null, null, null);
+    }
+
+    @Test
+    @DisplayName("★ 마지막 수행 PM의 종료 시각을 늦추면 last_done·next_due가 재계산되고 지연 플래그가 초기화되며 PM 지연 알람이 해소된다")
+    void editLastPmLater() {
+        Instant oldEnded = now.minus(5, ChronoUnit.HOURS);
+        Instant newEnded = now.minus(2, ChronoUnit.HOURS);
+        existingPm(oldEnded);
+        PmSchedule schedule = schedule(oldEnded, oldEnded.plus(1, ChronoUnit.DAYS), true);
+        given(pmScheduleRepository.findByEquipmentId(EQUIPMENT_ID)).willReturn(Optional.of(schedule));
+        given(inspectionRepository.findLatestEndedAt(EQUIPMENT_ID, Inspection.Type.PM)).willReturn(Optional.of(newEnded));
+
+        service.update(100L, updateEnded(newEnded), WORKER_ID, "TECHNICIAN");
+
+        assertThat(schedule.getLastDoneAt()).isEqualTo(newEnded);
+        assertThat(schedule.getNextDueAt()).isEqualTo(newEnded.plus(1, ChronoUnit.DAYS)); // DAILY
+        assertThat(schedule.isOverdueAlarmSent()).isFalse();
+        verify(alarmCommandService).resolvePmOverdueByEquipment(eq(EQUIPMENT_ID), eq(WORKER_ID), anyString());
+    }
+
+    @Test
+    @DisplayName("★ 마지막 수행 PM의 종료 시각을 앞당기면 직전 PM 수행 시각까지만 되돌려진다 (그보다 과거로는 못 감), 알람은 새로 해소하지 않는다")
+    void editLastPmEarlierRewindsOnlyToPreviousPm() {
+        Instant oldEnded = now.minus(5, ChronoUnit.HOURS);
+        Instant newEnded = now.minus(30, ChronoUnit.DAYS);               // 크게 앞당김
+        Instant previousPmEnded = now.minus(10, ChronoUnit.DAYS);        // 그 설비의 직전 PM
+        existingPm(oldEnded);
+        PmSchedule schedule = schedule(oldEnded, oldEnded.plus(1, ChronoUnit.DAYS), false);
+        given(pmScheduleRepository.findByEquipmentId(EQUIPMENT_ID)).willReturn(Optional.of(schedule));
+        // 수정 반영 후 이 설비 PM 이력 중 가장 늦은 종료 = 직전 PM
+        given(inspectionRepository.findLatestEndedAt(EQUIPMENT_ID, Inspection.Type.PM)).willReturn(Optional.of(previousPmEnded));
+
+        service.update(100L, updateEnded(newEnded), WORKER_ID, "TECHNICIAN");
+
+        assertThat(schedule.getLastDoneAt()).isEqualTo(previousPmEnded);
+        assertThat(schedule.getNextDueAt()).isEqualTo(previousPmEnded.plus(1, ChronoUnit.DAYS));
+        verify(alarmCommandService, never()).resolvePmOverdueByEquipment(anyLong(), anyLong(), anyString());
+    }
+
+    @Test
+    @DisplayName("마지막 수행이 아닌 과거 PM의 종료 시각 수정은 스케줄에 영향이 없다")
+    void editOlderPmLeavesScheduleAlone() {
+        Instant lastDone = now.minus(1, ChronoUnit.DAYS);
+        Instant oldEnded = now.minus(8, ChronoUnit.DAYS);
+        Instant newEnded = now.minus(7, ChronoUnit.DAYS); // 여전히 last_done보다 이전
+        existingPm(oldEnded);
+        PmSchedule schedule = schedule(lastDone, lastDone.plus(1, ChronoUnit.DAYS), true);
+        given(pmScheduleRepository.findByEquipmentId(EQUIPMENT_ID)).willReturn(Optional.of(schedule));
+
+        service.update(100L, updateEnded(newEnded), WORKER_ID, "TECHNICIAN");
+
+        assertThat(schedule.getLastDoneAt()).isEqualTo(lastDone);
+        assertThat(schedule.isOverdueAlarmSent()).isTrue();
+        verify(inspectionRepository, never()).findLatestEndedAt(anyLong(), any());
+        verify(alarmCommandService, never()).resolvePmOverdueByEquipment(anyLong(), anyLong(), anyString());
+    }
+
+    @Test
+    @DisplayName("과거 PM을 last_done보다 늦게 고쳐 새 마지막 수행이 되면 스케줄이 그 시각으로 갱신된다")
+    void editOlderPmBecomesLast() {
+        Instant lastDone = now.minus(5, ChronoUnit.DAYS);
+        Instant oldEnded = now.minus(8, ChronoUnit.DAYS);
+        Instant newEnded = now.minus(3, ChronoUnit.HOURS); // last_done 이후로 이동
+        existingPm(oldEnded);
+        PmSchedule schedule = schedule(lastDone, lastDone.plus(1, ChronoUnit.DAYS), true);
+        given(pmScheduleRepository.findByEquipmentId(EQUIPMENT_ID)).willReturn(Optional.of(schedule));
+        given(inspectionRepository.findLatestEndedAt(EQUIPMENT_ID, Inspection.Type.PM)).willReturn(Optional.of(newEnded));
+
+        service.update(100L, updateEnded(newEnded), WORKER_ID, "TECHNICIAN");
+
+        assertThat(schedule.getLastDoneAt()).isEqualTo(newEnded);
+        assertThat(schedule.isOverdueAlarmSent()).isFalse();
+    }
+
+    @Test
+    @DisplayName("종료 시각이 바뀌지 않는 PM 수정(내용만)은 스케줄을 조회하지도 않는다")
+    void editContentOnlyDoesNotTouchSchedule() {
+        Instant oldEnded = now.minus(5, ChronoUnit.HOURS);
+        existingPm(oldEnded);
+
+        service.update(100L, updateEnded(oldEnded), WORKER_ID, "TECHNICIAN");
+
+        verify(pmScheduleRepository, never()).findByEquipmentId(anyLong());
+    }
+
+    @Test
+    @DisplayName("BM 수정·스케줄 없는 설비의 PM 수정은 스케줄을 건드리지 않고 에러도 없다")
+    void bmAndNoScheduleAreSafe() {
+        existingBm();
+        service.update(100L, new InspectionUpdateRequest(null, started, ended.minus(10, ChronoUnit.MINUTES),
+                "수정", "조치", Inspection.Cause4M.MACHINE, null, null), WORKER_ID, "TECHNICIAN");
+        verify(pmScheduleRepository, never()).findByEquipmentId(anyLong());
+
+        Instant oldEnded = now.minus(5, ChronoUnit.HOURS);
+        existingPm(oldEnded);
+        given(pmScheduleRepository.findByEquipmentId(EQUIPMENT_ID)).willReturn(Optional.empty());
+        assertThat(service.update(100L, updateEnded(now.minus(4, ChronoUnit.HOURS)), WORKER_ID, "TECHNICIAN").id())
+                .isEqualTo(100L);
+    }
 }

@@ -4,8 +4,15 @@ import { tokenStorage } from './tokenStorage'
 import { ApiError, CLIENT_ERROR_CODE } from './types'
 import type { ApiErrorBody, AuthUserSummary } from './types'
 
+/**
+ * API 베이스 URL.
+ * - 개발 모드: VITE_API_BASE_URL 이 없으면 로컬 백엔드(localhost:8080)로 폴백한다.
+ * - 프로덕션 빌드: localhost 번들이 배포되는 사고를 막기 위해 폴백하지 않는다.
+ *   env 가 없으면 같은 도메인의 상대경로 `/api/v1`(리버스 프록시 구성)을 사용한다.
+ *   (빌드 시점 검사는 vite.config.ts 에서 수행한다)
+ */
 export const API_BASE_URL: string =
-  import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api/v1'
+  import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? 'http://localhost:8080/api/v1' : '/api/v1')
 
 /** 인증 없이 호출되는 엔드포인트 (docs/11 P-4) — 401 리프레시 대상에서 제외 */
 const PUBLIC_PATHS = ['/auth/login', '/auth/refresh']
@@ -80,14 +87,28 @@ async function requestNewTokens(): Promise<RefreshResult> {
   }
 
   // 인터셉터 재귀를 피하기 위해 인스턴스가 아닌 기본 axios 로 호출한다.
-  const { data } = await axios.post<RefreshResponse>(
-    `${API_BASE_URL}/auth/refresh`,
-    { refreshToken },
-    { headers: { 'Content-Type': 'application/json' }, timeout: 15_000 },
-  )
+  let data: RefreshResponse
+  try {
+    ;({ data } = await axios.post<RefreshResponse>(
+      `${API_BASE_URL}/auth/refresh`,
+      { refreshToken },
+      { headers: { 'Content-Type': 'application/json' }, timeout: 15_000 },
+    ))
+  } catch (cause) {
+    // 서버 응답 코드(code)와 상태를 보존한 ApiError 로 정규화해 호출부가 분기하게 한다.
+    throw toApiError(cause)
+  }
 
   tokenStorage.setTokens(data.accessToken, data.refreshToken ?? refreshToken)
   return { accessToken: data.accessToken, user: data.user ?? null }
+}
+
+/**
+ * 서버가 refresh 토큰을 무효로 판정했는지(401/403) 여부.
+ * 네트워크 장애·타임아웃·5xx 는 false — 이때는 저장된 refresh 를 파기하면 안 된다.
+ */
+export function isRefreshRejected(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 401 || error.status === 403)
 }
 
 function refreshAccessToken(): Promise<RefreshResult> {
@@ -109,21 +130,45 @@ apiClient.interceptors.response.use(
     const status = error.response?.status
     const isPublic = PUBLIC_PATHS.some((path) => config?.url?.startsWith(path))
 
-    if (status === 401 && config && !config._retried && !isPublic) {
-      config._retried = true
-      try {
-        const { accessToken } = await refreshAccessToken()
-        config.headers.set('Authorization', `Bearer ${accessToken}`)
-        return await apiClient.request(config as AxiosRequestConfig)
-      } catch {
+    if (status === 401 && config && !isPublic) {
+      // 재시도한 요청이 또 401 이면 갱신한 토큰도 거부된 것이므로 세션 만료로 확정한다.
+      if (config._retried) {
         notifyUnauthorized()
         return Promise.reject(toApiError(error))
       }
+
+      config._retried = true
+
+      // 1) 리프레시 호출 — 실패 원인에 따라 세션 파기 여부가 갈린다.
+      let accessToken: string
+      try {
+        ;({ accessToken } = await refreshAccessToken())
+      } catch (refreshError) {
+        if (isRefreshRejected(refreshError)) {
+          // 서버가 401/403 으로 refresh 무효를 알렸다 → 세션 종료
+          notifyUnauthorized()
+          return Promise.reject(toApiError(error))
+        }
+        // 일시적 네트워크 장애/5xx — 저장된 refresh 를 파기하지 않고 원인 오류를 그대로 전달한다.
+        return Promise.reject(toApiError(refreshError))
+      }
+
+      // 2) 원래 요청 재시도 — 실패해도 세션과 무관하므로 그 오류를 그대로 reject 한다.
+      //    (재시도에서 다시 401 이면 위 분기에서 로그아웃 처리된다)
+      config.headers.set('Authorization', `Bearer ${accessToken}`)
+      return apiClient.request(config as AxiosRequestConfig)
     }
 
     return Promise.reject(toApiError(error))
   },
 )
+
+/** Retry-After 헤더(초 단위 정수)를 숫자로 — 날짜 형식 등 해석 불가면 undefined */
+function parseRetryAfter(value: unknown): number | undefined {
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined
+  const seconds = Number(value)
+  return Number.isFinite(seconds) && seconds >= 0 ? Math.ceil(seconds) : undefined
+}
 
 /** axios 에러를 화면에서 다루는 ApiError 로 변환 (code 기준 분기용) */
 export function toApiError(error: unknown): ApiError {
@@ -134,7 +179,13 @@ export function toApiError(error: unknown): ApiError {
   if (axios.isAxiosError<ApiErrorBody>(error)) {
     const body = error.response?.data
     if (body?.code) {
-      return new ApiError(body.code, body.message, error.response?.status ?? 0, body.timestamp)
+      return new ApiError(
+        body.code,
+        body.message,
+        error.response?.status ?? 0,
+        body.timestamp,
+        parseRetryAfter(error.response?.headers?.['retry-after']),
+      )
     }
     return new ApiError(
       error.response ? CLIENT_ERROR_CODE.UNKNOWN : CLIENT_ERROR_CODE.NETWORK_ERROR,

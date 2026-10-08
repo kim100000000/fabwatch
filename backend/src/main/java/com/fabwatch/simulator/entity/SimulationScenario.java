@@ -6,6 +6,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -22,7 +23,8 @@ import java.time.Instant;
  * H2(테스트)와 MySQL(운영) 양쪽에서 동일하게 동작하도록 한다.
  */
 @Entity
-@Table(name = "simulation_scenarios")
+@Table(name = "simulation_scenarios",
+        indexes = @Index(name = "idx_scenario_sensor", columnList = "sensor_id"))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @SQLDelete(sql = "UPDATE simulation_scenarios SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")

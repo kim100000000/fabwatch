@@ -1,9 +1,11 @@
+import { usePageTitle } from '@/shared/hooks/usePageTitle'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ReportDetailPanel } from '@/features/aireport'
 import { EmptyState } from '@/shared/ui'
 
 /** S-7 AI 리포트 상세/편집 (/reports/:id) */
 export function ReportDetailPage() {
+  usePageTitle('AI 리포트 상세')
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const reportId = Number(id)

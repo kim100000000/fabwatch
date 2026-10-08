@@ -83,10 +83,14 @@ export function alarmFromEvent(payload: AlarmEventPayload): Alarm {
   }
 }
 
+/** 상태 필터 값 — 서버 상태 3종 + '미해결' 묶음(OPEN+ACK) */
+export type AlarmStatusFilter = AlarmStatus | 'UNRESOLVED'
+
 /** GET /alarms 쿼리 필터 (docs/06 §6) */
 export interface AlarmListFilter {
   equipmentId?: number | null
-  status?: AlarmStatus | null
+  /** 'UNRESOLVED' = 미해결(OPEN+ACK) — 서버 status 는 단일 값이라 클라이언트가 두 번 조회해 합친다 */
+  status?: AlarmStatusFilter | null
   severity?: AlarmSeverity | null
   /** UTC ISO */
   from?: string | null
@@ -113,13 +117,15 @@ export interface ManualAlarmRequest {
  */
 export interface AlarmFilterValue {
   equipmentId: number | null
-  status: AlarmStatus | null
+  /** null = 전체, 'UNRESOLVED' = 미해결(발생+확인) */
+  status: AlarmStatusFilter | null
   severity: AlarmSeverity | null
   /** 'YYYY-MM-DD' (KST) */
   fromDate: string
   toDate: string
 }
 
+/** 모든 조건을 비운 필터(상태 '전체') */
 export const EMPTY_ALARM_FILTER: AlarmFilterValue = {
   equipmentId: null,
   status: null,
@@ -127,6 +133,9 @@ export const EMPTY_ALARM_FILTER: AlarmFilterValue = {
   fromDate: '',
   toDate: '',
 }
+
+/** 알람 센터 기본 필터 — 처리해야 할 미해결(발생+확인) 알람부터 보여준다 */
+export const DEFAULT_ALARM_FILTER: AlarmFilterValue = { ...EMPTY_ALARM_FILTER, status: 'UNRESOLVED' }
 
 export const ALARM_SEVERITIES: AlarmSeverity[] = ['WARNING', 'MAJOR', 'CRITICAL']
 export const ALARM_STATUSES: AlarmStatus[] = ['OPEN', 'ACK', 'RESOLVED']
@@ -136,6 +145,13 @@ export const ALARM_STATUS_LABEL: Record<AlarmStatus, string> = {
   OPEN: '발생',
   ACK: '확인',
   RESOLVED: '해제',
+}
+
+/** 심각도 한글 라벨 (API 값은 그대로 유지) */
+export const ALARM_SEVERITY_LABEL: Record<AlarmSeverity, string> = {
+  WARNING: '경고',
+  MAJOR: '주요',
+  CRITICAL: '위험',
 }
 
 export const ALARM_TYPE_LABEL: Record<AlarmType, string> = {
@@ -165,4 +181,68 @@ export function compareAlarms(a: Alarm, b: Alarm): number {
 export function linkedInspectionId(resolveNote: string | null | undefined): number | null {
   const match = resolveNote?.match(/^BM 점검 이력 #(\d+)/)
   return match ? Number(match[1]) : null
+}
+
+/** 설비별 미해결(OPEN+ACK) 알람 집계 — 설비 목록/대시보드의 알람 건수·정렬에 쓴다 */
+export interface OpenAlarmSummary {
+  /** 전체 미해결 알람 건수 */
+  total: number
+  /** equipmentId → 건수 / 최고 심각도 (미해결이 없는 설비는 키가 없다) */
+  byEquipment: Record<number, { count: number; maxSeverity: AlarmSeverity }>
+  /** 조회 상한(상태당 2,000건)에 걸려 집계가 잘렸는지 */
+  truncated: boolean
+}
+
+/**
+ * 알람이 현재 필터 조건에 맞는지 — 실시간(SSE)으로 들어온 알람이나 로컬 갱신분을 화면에 끼워 넣기 전에 판정한다.
+ * 기간은 'YYYY-MM-DD'(KST) 입력을 UTC 로 바꿔 비교해야 해서 변환 함수를 주입받는다(shared 의존 최소화).
+ */
+export function alarmMatchesFilter(
+  alarm: Alarm,
+  filter: AlarmFilterValue,
+  toUtcIso: (date: string, edge: 'start' | 'end') => string | undefined,
+): boolean {
+  if (filter.equipmentId !== null && alarm.equipmentId !== filter.equipmentId) return false
+  if (filter.status === 'UNRESOLVED') {
+    if (alarm.status === 'RESOLVED') return false
+  } else if (filter.status !== null && alarm.status !== filter.status) {
+    return false
+  }
+  if (filter.severity !== null && alarm.severity !== filter.severity) return false
+  const occurred = new Date(alarm.occurredAt).getTime()
+  const from = toUtcIso(filter.fromDate, 'start')
+  const to = toUtcIso(filter.toDate, 'end')
+  if (from && occurred < new Date(from).getTime()) return false
+  if (to && occurred > new Date(to).getTime()) return false
+  return true
+}
+
+/** 처리 단계 순위 — 같은 알람이 두 출처(서버 목록 / 실시간·로컬)에 있을 때 더 진행된 쪽을 고르는 기준 */
+const PROGRESS_RANK: Record<AlarmStatus, number> = { OPEN: 0, ACK: 1, RESOLVED: 2 }
+
+/**
+ * 서버 목록과 실시간(SSE)·로컬 갱신분을 id 기준으로 합친다.
+ * 같은 id 면 처리 단계가 더 진행된 쪽이 이기고, 단계가 같으면 **서버 값**이 이긴다
+ * (폴링 폴백 중 옛 실시간 값이 서버의 최신 상태를 덮어쓰지 않게 하고, 방금 한 확인/해제는 재조회 전에도 보이게 한다).
+ */
+export function mergeAlarms(fetched: Alarm[], live: Alarm[]): Alarm[] {
+  const byId = new Map<number, Alarm>()
+  fetched.forEach((alarm) => byId.set(alarm.id, alarm))
+  live.forEach((alarm) => {
+    const current = byId.get(alarm.id)
+    if (!current || PROGRESS_RANK[alarm.status] > PROGRESS_RANK[current.status]) {
+      byId.set(alarm.id, alarm)
+    }
+  })
+  return [...byId.values()].sort(compareAlarms)
+}
+
+/**
+ * 알람에서 '점검 등록'으로 이동할 S-5 경로.
+ * PM 지연 알람은 PM 점검으로, 그 외 알람은 BM 점검에 해당 알람을 연계해서 연다(알람은 저장 시 자동 해제됨).
+ */
+export function inspectionRegisterPath(alarm: Pick<Alarm, 'id' | 'equipmentId' | 'alarmType'>): string {
+  return alarm.alarmType === 'PM_OVERDUE'
+    ? `/inspections/new?equipmentId=${alarm.equipmentId}&type=PM`
+    : `/inspections/new?equipmentId=${alarm.equipmentId}&alarmId=${alarm.id}`
 }

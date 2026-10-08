@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { login as loginRequest, logout as logoutRequest } from '@/features/auth'
 import type { AuthUser, LoginRequest, UserRole } from '@/features/auth'
-import { onUnauthorized, restoreSession, tokenStorage } from '@/shared/api'
+import { isRefreshRejected, onUnauthorized, restoreSession, tokenStorage } from '@/shared/api'
 import type { AuthUserSummary } from '@/shared/api'
 import { AuthContext } from './AuthContext'
-import type { AuthContextValue, AuthStatus } from './AuthContext'
+import type { AuthContextValue, AuthStatus, SessionNotice } from './AuthContext'
 
 /**
  * 전역 인증 상태.
@@ -16,6 +16,7 @@ import type { AuthContextValue, AuthStatus } from './AuthContext'
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading')
   const [user, setUser] = useState<AuthUser | null>(null)
+  const [sessionNotice, setSessionNotice] = useState<SessionNotice>(null)
 
   // 세션 복구: Refresh 가 있으면 Access 재발급 → 응답의 user 로 사용자 정보 복원
   useEffect(() => {
@@ -36,11 +37,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           tokenStorage.clear()
         }
       })
-      .catch(() => {
+      .catch((cause: unknown) => {
         if (!alive) return
-        tokenStorage.clear()
         setUser(null)
         setStatus('anonymous')
+        if (isRefreshRejected(cause)) {
+          // 서버가 401/403 으로 refresh 무효를 알린 경우에만 저장된 세션을 파기한다.
+          tokenStorage.clear()
+        } else {
+          // 네트워크 장애/5xx — 저장된 refresh 는 유지(새로고침하면 복구 재시도 가능)
+          setSessionNotice('restore-failed')
+        }
       })
 
     return () => {
@@ -52,11 +59,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => onUnauthorized(() => {
     setUser(null)
     setStatus('anonymous')
+    setSessionNotice('expired')
   }), [])
+
+  const clearSessionNotice = useCallback(() => setSessionNotice(null), [])
 
   const login = useCallback(async (payload: LoginRequest) => {
     const response = await loginRequest(payload)
     setUser(response.user)
+    setSessionNotice(null)
     setStatus('authenticated')
     return response.user
   }, [])
@@ -71,8 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, login, logout }),
-    [status, user, login, logout],
+    () => ({ status, user, sessionNotice, clearSessionNotice, login, logout }),
+    [status, user, sessionNotice, clearSessionNotice, login, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
+import { ROLE_LABEL, useUserLookup } from '@/features/auth'
 import { toApiError } from '@/shared/api'
 import { statusLabel } from '@/shared/lib/equipmentStatus'
 import { toUserMessage } from '@/shared/lib/errorMessage'
@@ -47,6 +48,9 @@ const EMPTY_FORM: FormState = {
 export function EquipmentFormDialog({ equipmentId, onClose, onSaved }: EquipmentFormDialogProps) {
   const isEdit = equipmentId !== null
   const { lines } = useLineTree()
+  // 담당 엔지니어 후보 — 이름으로 고르게 한다 (ENGINEER/ADMIN 만)
+  const managers = useUserLookup()
+  const managerCandidates = managers.users.filter((user) => user.role === 'ENGINEER' || user.role === 'ADMIN')
   // 수정 모드는 목록 요약에 없는 필드(설치일·비고)가 필요해 상세를 다시 읽는다
   const { equipment, loading: detailLoading, error: detailError } = useEquipmentDetail(equipmentId)
 
@@ -222,16 +226,31 @@ export function EquipmentFormDialog({ equipmentId, onClose, onSaved }: Equipment
               />
             </div>
             <div className="field">
-              {/* 담당자 조회 API 가 아직 없어 사용자 ID 를 직접 입력받는다 (존재 검증은 서버) */}
-              <label htmlFor="equipment-manager">담당 엔지니어 ID</label>
-              <input
+              <label htmlFor="equipment-manager">담당 엔지니어</label>
+              <select
                 id="equipment-manager"
-                type="number"
-                min={1}
                 value={form.managerId}
-                placeholder="선택 — 비워두면 미지정"
+                disabled={managers.loading}
                 onChange={(event) => setField('managerId', event.target.value)}
-              />
+              >
+                <option value="">{managers.loading ? '불러오는 중…' : '미지정'}</option>
+                {managerCandidates.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} ({ROLE_LABEL[user.role] ?? user.role})
+                  </option>
+                ))}
+                {/* 현재 담당자가 후보 목록에 없거나 목록 조회가 실패해도 기존 지정이 사라지지 않게 보존한다 */}
+                {form.managerId !== '' && !managerCandidates.some((user) => String(user.id) === form.managerId) && (
+                  <option value={form.managerId}>
+                    {equipment?.managerName ? `${equipment.managerName} (현재 지정)` : `현재 지정 (ID ${form.managerId})`}
+                  </option>
+                )}
+              </select>
+              {managers.error && (
+                <span className="field-hint">
+                  담당자 목록을 불러오지 못했습니다. 기존 지정은 그대로 유지됩니다.
+                </span>
+              )}
             </div>
           </div>
 

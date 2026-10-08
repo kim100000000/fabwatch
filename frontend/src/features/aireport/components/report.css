@@ -17,7 +17,7 @@
 .report-status[data-status='GENERATING'] { color: var(--status-idle); }
 .report-status[data-status='DRAFT'] { color: var(--alarm-warning); }
 .report-status[data-status='CONFIRMED'] { color: var(--status-run); }
-.report-status[data-status='FAILED'] { color: var(--status-down); }
+.report-status[data-status='FAILED'] { color: var(--text-down); }
 
 .report-status-spinner {
   width: 12px;
@@ -118,7 +118,7 @@
 
 .report-inline-error {
   max-width: 280px;
-  color: var(--alarm-critical);
+  color: var(--text-critical);
   font-size: 12px;
   white-space: normal;
 }
@@ -318,7 +318,7 @@
   padding: 14px 16px;
   border: 1px solid var(--status-down);
   border-radius: var(--radius);
-  color: var(--status-down);
+  color: var(--text-down);
 }
 
 .report-failed p {

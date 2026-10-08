@@ -5,6 +5,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -17,7 +18,8 @@ import org.hibernate.annotations.SQLRestriction;
  * 점검별 체크리스트 결과 (docs/05 inspection_check_results).
  */
 @Entity
-@Table(name = "inspection_check_results")
+@Table(name = "inspection_check_results",
+        indexes = @Index(name = "idx_check_result_inspection", columnList = "inspection_id"))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @SQLDelete(sql = "UPDATE inspection_check_results SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")

@@ -17,6 +17,14 @@ spring:
     serialization:
       write-dates-as-timestamps: false   # 응답 시각은 ISO-8601 UTC 문자열
     time-zone: UTC
+  datasource:
+    hikari:
+      # 스케줄러(수집·집계)·SSE·요청이 커넥션을 함께 쓴다 — 무료 티어 MySQL max_connections를 고려해 보수적으로 명시 (docs/15 §5)
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:10000}   # 커넥션 대기 상한(ms) — 고갈 시 오래 매달리지 않고 빨리 실패
+  lifecycle:
+    # graceful shutdown: 진행 중인 요청·트랜잭션을 마무리할 시간 (server.shutdown=graceful 과 짝)
+    timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT:20s}
   task:
     scheduling:
       pool:
@@ -30,6 +38,7 @@ spring:
 
 server:
   port: ${PORT:8080}
+  shutdown: graceful          # 종료 신호를 받으면 새 요청은 거절하고 진행 중인 요청을 마무리한 뒤 종료
 
 # 헬스체크만 공개, 나머지 actuator 엔드포인트는 비노출 (docs/13 §6)
 management:
@@ -46,11 +55,31 @@ fabwatch:
     secret: ${JWT_SECRET}
     access-exp-minutes: ${JWT_ACCESS_EXP_MIN:30}
     refresh-exp-days: ${JWT_REFRESH_EXP_DAYS:14}
+    refresh-grace-seconds: ${JWT_REFRESH_GRACE_SECONDS:10}   # 회전 직후 직전 Refresh 토큰 허용 시간(병렬 갱신 대비). 0이면 유예 없음
   cors:
     # `*` 금지 — 허용 Origin만 (docs/11 §4)
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   seed:
     enabled: false
+  security:
+    # 로그인·리프레시 IP별 분당 허용 횟수 (엔드포인트별 각각, 초과 시 429 RATE_LIMITED). 프록시 뒤에서는 server.forward-headers-strategy 필요
+    rate-limit:
+      auth-per-minute: ${RATE_LIMIT_AUTH_PER_MINUTE:30}
+    max-request-bytes: ${MAX_REQUEST_BYTES:1048576}          # 요청 본문 상한(바이트, 기본 1MB). 초과 시 413 PAYLOAD_TOO_LARGE
+  sse:
+    max-connections: ${SSE_MAX_CONNECTIONS:200}              # 전체 SSE 동시 연결 상한 (초과 시 429 RATE_LIMITED)
+    max-per-user: ${SSE_MAX_PER_USER:5}                      # 사용자당 상한 (초과 시 가장 오래된 연결을 닫고 새 연결 허용)
+    async: ${SSE_ASYNC:true}                                 # true=구독자별 큐+전용 전송 스레드(수집 스레드 비블로킹), false=동기 전송(테스트용)
+    queue-capacity: ${SSE_QUEUE_CAPACITY:100}                # 구독자별 대기 큐 크기 — 가득 차면 느린 구독자로 보고 연결 종료
+    send-timeout-ms: ${SSE_SEND_TIMEOUT_MS:5000}             # 한 번의 전송이 이 시간 넘게 막히면 느린 구독자로 보고 연결 종료
+    sender-threads: ${SSE_SENDER_THREADS:8}                  # SSE 전송 전용 스레드 수
+  sensor:
+    retention:
+      chunk-size: ${SENSOR_PURGE_CHUNK_SIZE:10000}           # 원본 7일 삭제 배치의 청크(트랜잭션)당 삭제 행 수 (docs/15 §7)
+      chunk-pause-ms: ${SENSOR_PURGE_CHUNK_PAUSE_MS:100}     # 청크 사이 대기(ms) — 수집 INSERT에 여유를 준다
+    query:
+      max-range-days: ${SENSOR_QUERY_MAX_RANGE_DAYS:31}      # 센서 이력 조회 최대 기간(일), 초과 시 400 VALIDATION_ERROR
+      max-points-per-sensor: ${SENSOR_QUERY_MAX_POINTS:20000} # 센서당 응답 최대 포인트 — 초과 구간은 서버가 5분/1시간 버킷으로 다운샘플링
   ai:
     # AI 리포트 (docs/13 환경변수 표). 키는 환경변수로만 — 코드/로그/응답/DB에 노출 금지 (docs/11 §5·§7)
     provider: ${AI_PROVIDER:claude}          # claude | mock (mock은 명시했을 때만 — 키가 없다고 자동 mock 금지)
@@ -63,6 +92,10 @@ fabwatch:
   simulator:
     # 데모 자동 시작(POST /simulator/demo)의 DRIFT 지속 시간(분). 3분 시연용 기본 2분 (docs/03 F-4.2, docs/06 §8)
     demo-duration-min: ${SIMULATOR_DEMO_DURATION_MIN:2}
+    # DRIFT가 목표값(plateau)에 도달한 뒤 유지하는 시간(분). 지나면 시나리오가 자동 비활성화돼 알람·DOWN 재발을 막는다
+    plateau-hold-minutes: ${SIMULATOR_PLATEAU_HOLD_MIN:5}
+    # STEP/SPIKE 시나리오의 최대 수명(분) — 주입 후 이 시간이 지나면 자동 비활성화
+    max-lifetime-minutes: ${SIMULATOR_MAX_LIFETIME_MIN:30}
   scheduler:
     # @Scheduled 전체 on/off (docs/13 §5). 테스트에서는 false로 꺼서 시간 기반 로직을 격리한다.
     enabled: ${SCHEDULER_ENABLED:true}

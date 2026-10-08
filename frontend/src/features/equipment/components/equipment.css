@@ -249,7 +249,7 @@
   padding: 10px 12px;
   border: 1px solid var(--alarm-critical);
   border-radius: var(--radius);
-  color: var(--alarm-critical);
+  color: var(--text-critical);
   font-size: 13px;
 }
 
@@ -310,4 +310,4 @@
 /* ---------- 상세 헤더 값 강조 (FR-2.4) — 색은 전역 토큰만 ---------- */
 .detail-info .info-value-muted { color: var(--text-secondary); }
 .detail-info .info-value-alert { color: var(--alarm-major); font-weight: 600; }
-.detail-info .info-value-danger { color: var(--status-down); font-weight: 600; }
+.detail-info .info-value-danger { color: var(--text-down); font-weight: 600; }

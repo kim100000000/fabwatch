@@ -85,9 +85,7 @@ export function AlarmResolveDialog({ alarm, onClose, onResolved }: AlarmResolveD
             placeholder="조치 내용을 입력하세요. 예) 베어링 교체 후 진동 정상 확인"
             onChange={(event) => setNote(event.target.value)}
           />
-          <span className="field-hint">
-            RESOLVED 처리 시 사유가 이력으로 남습니다 (docs/03 F-5.3).
-          </span>
+          <span className="field-hint">해제 처리 시 사유가 이력으로 남습니다.</span>
         </div>
 
         {error && (

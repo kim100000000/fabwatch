@@ -37,6 +37,14 @@ const ERROR_MESSAGE: Record<string, string> = {
   // 시뮬레이터 (docs/06 §8)
   SCENARIO_ALREADY_ACTIVE:
     '해당 센서에 같은 유형의 시나리오가 이미 실행 중입니다. 기존 시나리오를 해제한 뒤 다시 주입해 주세요.',
+  // 공통 (docs/06 공통 오류) — 서버가 공통 포맷으로 내려주는 4xx
+  // RATE_LIMITED 는 toUserMessage 에서 Retry-After(초)를 붙여 따로 만든다.
+  RATE_LIMITED: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+  PAYLOAD_TOO_LARGE: '보내는 내용이 너무 큽니다. 내용을 줄여서 다시 시도해 주세요.',
+  CONFLICT: '다른 사용자가 먼저 변경했거나 이미 처리된 요청입니다. 화면을 새로고침한 뒤 다시 시도해 주세요.',
+  METHOD_NOT_ALLOWED: '허용되지 않은 요청입니다.',
+  UNSUPPORTED_MEDIA_TYPE: '지원하지 않는 요청 형식입니다.',
+  NOT_ACCEPTABLE: '지원하지 않는 응답 형식 요청입니다.',
   // 클라이언트 측
   [CLIENT_ERROR_CODE.NETWORK_ERROR]: '서버에 연결할 수 없습니다. 네트워크 상태를 확인해 주세요.',
   [CLIENT_ERROR_CODE.UNKNOWN]: '알 수 없는 오류가 발생했습니다.',
@@ -49,6 +57,12 @@ const ERROR_MESSAGE: Record<string, string> = {
  */
 export function toUserMessage(error: unknown): string {
   if (error instanceof ApiError) {
+    if (error.code === 'RATE_LIMITED') {
+      // ACCOUNT_LOCKED(429)와 구분하기 위해 반드시 code 로 분기한다
+      return error.retryAfterSec
+        ? `요청이 너무 많습니다. 잠시 후 다시 시도해 주세요(${error.retryAfterSec}초).`
+        : ERROR_MESSAGE.RATE_LIMITED
+    }
     return ERROR_MESSAGE[error.code] || error.message || ERROR_MESSAGE[CLIENT_ERROR_CODE.UNKNOWN]
   }
   return ERROR_MESSAGE[CLIENT_ERROR_CODE.UNKNOWN]

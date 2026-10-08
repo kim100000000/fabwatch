@@ -1,6 +1,8 @@
 package com.fabwatch.common.config;
 
+import com.fabwatch.common.security.AuthRateLimitFilter;
 import com.fabwatch.common.security.JwtAuthenticationFilter;
+import com.fabwatch.common.security.RequestSizeLimitFilter;
 import com.fabwatch.common.security.RestAccessDeniedHandler;
 import com.fabwatch.common.security.RestAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +17,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.filter.CorsFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
@@ -31,6 +34,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private final RequestSizeLimitFilter requestSizeLimitFilter;
+    private final AuthRateLimitFilter authRateLimitFilter;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RestAuthenticationEntryPoint authenticationEntryPoint;
     private final RestAccessDeniedHandler accessDeniedHandler;
@@ -51,6 +56,10 @@ public class SecurityConfig {
                 .exceptionHandling(handler -> handler
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
+                // 순서: CORS → 본문 크기 상한 → 로그인/리프레시 레이트 리밋 → JWT 인증
+                // (CORS 뒤에 둬야 413/429 응답에도 CORS 헤더가 붙어 브라우저 프론트가 응답 본문을 읽을 수 있다)
+                .addFilterAfter(requestSizeLimitFilter, CorsFilter.class)
+                .addFilterAfter(authRateLimitFilter, RequestSizeLimitFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

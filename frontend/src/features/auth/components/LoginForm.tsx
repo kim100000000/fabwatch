@@ -3,6 +3,8 @@ import type { FormEvent } from 'react'
 import { useAuth } from '@/app/providers/useAuth'
 import { toUserMessage } from '@/shared/lib/errorMessage'
 import { Spinner } from '@/shared/ui'
+import { DEMO_ACCOUNTS, DEMO_LOGIN_ENABLED, DEMO_PASSWORD } from '../demoAccounts'
+import type { DemoAccount } from '../demoAccounts'
 import './LoginForm.css'
 
 interface LoginFormProps {
@@ -17,6 +19,13 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // 데모 계정 버튼 — 입력만 채우고 제출은 사용자가 직접 한다
+  const fillDemo = (account: DemoAccount) => {
+    setEmail(account.email)
+    setPassword(DEMO_PASSWORD)
+    setError(null)
+  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -44,7 +53,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           type="email"
           value={email}
           autoComplete="username"
-          placeholder="engineer@fabwatch.dev"
+          placeholder="name@company.com"
           onChange={(event) => setEmail(event.target.value)}
           required
         />
@@ -76,6 +85,25 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         {submitting && <Spinner />}
         {submitting ? '로그인 중…' : '로그인'}
       </button>
+
+      {DEMO_LOGIN_ENABLED && (
+        <div className="login-demo">
+          <p className="login-demo-title">데모 계정으로 둘러보기</p>
+          <div className="login-demo-buttons">
+            {DEMO_ACCOUNTS.map((account) => (
+              <button
+                key={account.role}
+                type="button"
+                className="btn btn-ghost login-demo-btn"
+                onClick={() => fillDemo(account)}
+              >
+                {account.label}
+              </button>
+            ))}
+          </div>
+          <p className="login-demo-note">데모용 가상 계정입니다. 버튼을 누르면 입력란이 채워집니다.</p>
+        </div>
+      )}
     </form>
   )
 }

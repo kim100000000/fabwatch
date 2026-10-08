@@ -15,35 +15,48 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.MessageDigest;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Optional;
 
 /**
  * 인증 서비스 (docs/03 F-1, docs/06 §1, docs/11 §2).
- * - 로그인: 잠금 확인 → 비밀번호 확인 → 활성 확인 → 토큰 발급
- * - 리프레시: 회전(rotation) + 재사용 감지 시 전체 세션 무효화
- * - 로그아웃: DB Refresh 삭제 (Access 블랙리스트는 만들지 않는다 — 과설계)
+ * - 로그인: 계정 행 잠금 → 잠금 확인 → 비밀번호 확인 → 활성 확인 → 토큰 발급(세션 1개 추가)
+ * - 리프레시: 제시된 토큰의 해시로 세션 조회 → 회전. 알 수 없는/만료 토큰은 401만(아무것도 지우지 않음)
+ * - 로그아웃: 제시된 Refresh의 세션 행만 삭제 (Access 블랙리스트는 만들지 않는다 — 과설계)
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
+    /**
+     * 존재하지 않는 이메일에도 BCrypt 비교를 한 번 수행하기 위한 고정 더미 해시(strength 10, SecurityConfig와 동일).
+     * 계정이 없을 때만 응답이 빨라(약 6ms vs 140ms) 이메일 존재 여부가 드러나는 것을 막는다.
+     * 어떤 비밀번호와도 의미 있게 대응하지 않는 값이며 실제 계정과 무관하다.
+     */
+    static final String DUMMY_PASSWORD_HASH = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
+    private final RefreshTokenService refreshTokenService;
 
     /**
      * noRollbackFor: 로그인 실패 카운트 증가(잠금 판정)는 예외를 던져도 반드시 커밋되어야 한다.
      * 기본 롤백 규칙을 쓰면 5회 실패 잠금이 영원히 동작하지 않는다.
+     *
+     * 계정 행을 FOR UPDATE로 잡고 카운트를 갱신하므로 동시 실패 요청이 직렬화되어 정확히 5회째에 잠긴다.
      */
     @Transactional(noRollbackFor = BusinessException.class)
     public TokenResponse login(LoginRequest request) {
         Instant now = Instant.now();
-        User user = userRepository.findByEmail(request.email())
-                // 존재하지 않는 이메일도 비밀번호 오류와 동일하게 처리 (계정 존재 여부 노출 방지)
-                .orElseThrow(() -> new BusinessException(ErrorCode.LOGIN_FAILED));
+        Optional<User> found = userRepository.findWithLockByEmail(request.email());
+        if (found.isEmpty()) {
+            // 없는 이메일도 같은 시간이 걸리게 더미 비교를 수행한 뒤 비밀번호 오류와 동일하게 응답 (계정 존재 여부 노출 방지)
+            passwordEncoder.matches(request.password(), DUMMY_PASSWORD_HASH);
+            throw new BusinessException(ErrorCode.LOGIN_FAILED);
+        }
+        User user = found.get();
 
         if (user.isLocked(now)) {
             throw new BusinessException(ErrorCode.ACCOUNT_LOCKED);
@@ -63,63 +76,52 @@ public class AuthService {
         }
 
         user.resetLoginFailure();
-        return issueTokens(user);
+        return issueTokens(user, refreshTokenService.issue(user.getId(), now));
     }
 
     /**
-     * Refresh 회전. 저장값과 다른 토큰이 제시되면 탈취로 간주하고 해당 사용자 세션을 전부 무효화한다.
-     * 무효화 역시 예외를 던져도 커밋되어야 하므로 noRollbackFor를 지정한다.
+     * Refresh 회전. 제시된 토큰의 해시로 세션을 찾아 같은 행을 새 토큰으로 교체한다.
+     * 알 수 없는/만료/폐기된 토큰은 401 INVALID_TOKEN만 반환하고 저장된 세션을 절대 지우지 않는다
+     * (비인증 요청으로 타인 세션을 끊을 수 없게 — 보안 감사 H-1).
+     * 비활성·삭제된 사용자는 거부하고 그 사용자의 세션을 정리한다(토큰을 쥔 본인 요청이므로 안전).
+     * 정리가 예외와 함께 커밋되어야 하므로 noRollbackFor를 지정한다.
      */
     @Transactional(noRollbackFor = BusinessException.class)
     public TokenResponse refresh(TokenRefreshRequest request) {
-        String presented = request.refreshToken();
-        Long userId = tokenProvider.extractUserIdFromRefreshToken(presented);
-        if (userId == null) {
+        RefreshTokenService.Rotation rotation = refreshTokenService.rotate(request.refreshToken(), Instant.now());
+
+        Optional<User> found = userRepository.findById(rotation.userId());
+        if (found.isEmpty()) {
+            refreshTokenService.revokeAll(rotation.userId());
             throw new BusinessException(ErrorCode.INVALID_TOKEN);
         }
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_TOKEN));
-
-        String stored = user.getRefreshToken();
-        if (stored == null || !constantTimeEquals(stored, presented)) {
-            // 이미 사용/폐기된 토큰 재사용 → 탈취 의심 (docs/11 §2)
-            user.clearRefreshToken();
-            log.warn("Refresh 토큰 재사용 감지 — 전체 세션 무효화: userId={}", userId);
-            throw new BusinessException(ErrorCode.INVALID_TOKEN);
-        }
-
-        if (user.isRefreshTokenExpired(Instant.now())) {
-            user.clearRefreshToken();
-            throw new BusinessException(ErrorCode.INVALID_TOKEN, "리프레시 토큰이 만료되었습니다. 다시 로그인하세요.");
-        }
-
+        User user = found.get();
         if (!user.isEnabled()) {
-            user.clearRefreshToken();
+            refreshTokenService.revokeAll(user.getId());
             throw new BusinessException(ErrorCode.USER_DISABLED);
         }
-
-        return issueTokens(user);
+        return issueTokens(user, rotation.newToken());
     }
 
+    /**
+     * 로그아웃 — 제시된 Refresh 토큰의 세션 행만 삭제한다(다른 기기 세션 유지).
+     * 토큰을 보내지 않은 구형 요청은 어느 세션인지 알 수 없으므로 안전 쪽으로 그 사용자의 세션을 전부 폐기한다.
+     */
     @Transactional
-    public void logout(Long userId) {
-        userRepository.findById(userId).ifPresent(User::clearRefreshToken);
+    public void logout(Long userId, String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            refreshTokenService.revokeAll(userId);
+            return;
+        }
+        refreshTokenService.revoke(userId, refreshToken);
     }
 
-    private TokenResponse issueTokens(User user) {
+    private TokenResponse issueTokens(User user, String refreshToken) {
         String accessToken = tokenProvider.createAccessToken(user.getId(), user.getName(), user.getRole().name());
-        String refreshToken = tokenProvider.createRefreshToken(user.getId());
-        user.updateRefreshToken(refreshToken, tokenProvider.refreshTokenExpiresAt());
         return new TokenResponse(
                 accessToken,
                 refreshToken,
                 tokenProvider.accessTokenExpiresInSeconds(),
                 UserSummaryResponse.from(user));
-    }
-
-    /** 타이밍 공격 방지용 상수 시간 비교 */
-    private boolean constantTimeEquals(String a, String b) {
-        return MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
     }
 }

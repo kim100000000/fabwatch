@@ -15,6 +15,34 @@
   border: 1px solid var(--alarm-critical);
   border-radius: var(--radius);
   background: var(--bg-base);
-  color: var(--alarm-critical);
+  color: var(--text-critical);
   font-size: 13px;
+}
+
+.login-demo {
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.login-demo-title {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.login-demo-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.login-demo-btn {
+  padding: 0 8px;
+}
+
+.login-demo-note {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
 }

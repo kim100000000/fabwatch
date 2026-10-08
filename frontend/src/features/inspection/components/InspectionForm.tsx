@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { useAlarmList, isUnresolved, ALARM_STATUS_LABEL } from '@/features/alarm'
+import { useAlarmList, ALARM_SEVERITY_LABEL, ALARM_STATUS_LABEL } from '@/features/alarm'
 import type { EquipmentSummary } from '@/features/equipment'
 import { toApiError } from '@/shared/api'
 import {
@@ -11,7 +11,8 @@ import {
 } from '@/shared/lib/datetime'
 import type { Shift } from '@/shared/lib/datetime'
 import { toUserMessage } from '@/shared/lib/errorMessage'
-import { ErrorState, LoadingBlock, Spinner } from '@/shared/ui'
+import { GLOSSARY } from '@/shared/lib/glossary'
+import { ErrorState, LoadingBlock, Spinner, Term } from '@/shared/ui'
 import { createInspection, updateInspection } from '../api/inspectionApi'
 import { useChecklist } from '../api/useChecklist'
 import {
@@ -49,6 +50,10 @@ interface InspectionFormProps {
   equipments?: EquipmentSummary[]
   /** create: ?equipmentId= 로 사전 선택된 설비 */
   defaultEquipmentId?: number | null
+  /** create: ?type= 로 사전 선택된 점검 유형 (알람 연계가 있으면 BM 이 우선) */
+  defaultType?: InspectionType | null
+  /** create: ?alarmId= 로 사전 선택된 연계 알람 (BM 전용, 목록에 없으면 자동 해제) */
+  defaultAlarmId?: number | null
   /** edit: 수정 대상 (설비·유형·알람은 불변) */
   initial?: InspectionDetail
   onSaved: (saved: InspectionDetail) => void
@@ -65,8 +70,14 @@ function LinkedAlarmSelect({
   value: number | null
   onChange: (alarmId: number | null) => void
 }) {
-  const { alarms, loading, error } = useAlarmList({ equipmentId, size: 50 })
-  const candidates = useMemo(() => alarms.filter(isUnresolved), [alarms])
+  // 미해결(발생+확인) 알람만 연계 후보다
+  const { alarms: candidates, loading, error } = useAlarmList({ equipmentId, status: 'UNRESOLVED', size: 50 })
+
+  // 사전 선택된 알람이 이미 해제됐거나 이 설비 것이 아니면(후보에 없으면) 연계를 비운다 — 보이지 않는 값이 제출되는 것을 막는다
+  const missing = value !== null && !loading && !error && !candidates.some((alarm) => alarm.id === value)
+  useEffect(() => {
+    if (missing) onChange(null)
+  }, [missing, onChange])
 
   return (
     <div className="field">
@@ -80,7 +91,7 @@ function LinkedAlarmSelect({
         <option value="">{loading ? '불러오는 중…' : '연계 안 함'}</option>
         {candidates.map((alarm) => (
           <option key={alarm.id} value={alarm.id}>
-            #{alarm.id} · {alarm.severity} · {alarm.message} ({ALARM_STATUS_LABEL[alarm.status]})
+            #{alarm.id} · {ALARM_SEVERITY_LABEL[alarm.severity]} · {alarm.message} ({ALARM_STATUS_LABEL[alarm.status]})
           </option>
         ))}
       </select>
@@ -88,8 +99,8 @@ function LinkedAlarmSelect({
         <span className="field-hint">알람 목록을 불러오지 못했습니다. 연계 없이 저장할 수 있습니다.</span>
       ) : (
         <span className="field-hint">
-          연계한 알람은 저장 시 자동으로 RESOLVED 처리됩니다.
-          {!loading && candidates.length === 0 ? ' (이 설비에 미조치 알람이 없습니다)' : ''}
+          연계한 알람은 저장 시 자동으로 해제 처리됩니다.
+          {!loading && candidates.length === 0 ? ' (이 설비에 미해결 알람이 없습니다)' : ''}
         </span>
       )}
     </div>
@@ -114,9 +125,18 @@ function ChecklistRow({
       <div>
         <span className="checklist-name">{item.itemName}</span>
         {item.criteria && <span className="checklist-criteria">기준: {item.criteria}</span>}
-        {showError && state.result === null && <p className="field-error">판정을 선택하세요.</p>}
+        {showError && state.result === null && (
+          <p className="field-error" id={`${name}-error`}>
+            판정을 선택하세요.
+          </p>
+        )}
       </div>
-      <div className="result-radios" role="radiogroup" aria-label={`${item.itemName} 판정`}>
+      <div
+        className="result-radios"
+        role="radiogroup"
+        aria-label={`${item.itemName} 판정`}
+        aria-describedby={showError && state.result === null ? `${name}-error` : undefined}
+      >
         {CHECK_RESULT_OPTIONS.map((option) => (
           <label key={option} data-result={option} data-checked={state.result === option}>
             <input
@@ -160,6 +180,8 @@ export function InspectionForm({
   mode,
   equipments = [],
   defaultEquipmentId = null,
+  defaultType = null,
+  defaultAlarmId = null,
   initial,
   onSaved,
   onCancel,
@@ -169,7 +191,9 @@ export function InspectionForm({
   const [equipmentId, setEquipmentId] = useState<number | null>(
     isEdit ? (initial?.equipmentId ?? null) : defaultEquipmentId,
   )
-  const [type, setType] = useState<InspectionType>(initial?.type ?? 'PM')
+  const [type, setType] = useState<InspectionType>(
+    initial?.type ?? (!isEdit && defaultAlarmId !== null ? 'BM' : (defaultType ?? 'PM')),
+  )
   const [startedAt, setStartedAt] = useState(
     initial ? toKstLocalInput(initial.startedAt) : nowLocal(-30),
   )
@@ -180,7 +204,9 @@ export function InspectionForm({
   const [actionTaken, setActionTaken] = useState(initial?.actionTaken ?? '')
   const [cause4m, setCause4m] = useState<Cause4m | ''>(initial?.cause4m ?? '')
   const [causeDetail, setCauseDetail] = useState(initial?.causeDetail ?? '')
-  const [alarmId, setAlarmId] = useState<number | null>(initial?.alarmId ?? null)
+  const [alarmId, setAlarmId] = useState<number | null>(
+    initial?.alarmId ?? (!isEdit ? defaultAlarmId : null),
+  )
   const [checks, setChecks] = useState<Record<number, CheckState>>(() => {
     const seeded: Record<number, CheckState> = {}
     initial?.checkResults.forEach((row) => {
@@ -251,12 +277,30 @@ export function InspectionForm({
     !!(startError || endError || equipmentError || contentError || causeError || checklistIncomplete) ||
     checklistUnavailable
 
+  /** 첫 오류 필드로 포커스 이동 — 렌더 순서(설비 → 시간 → 유형별 입력 → 내용)와 같은 순서로 검사한다 */
+  const focusFirstError = () => {
+    let target: HTMLElement | null = null
+    if (equipmentError) target = document.getElementById('insp-equipment')
+    else if (startError) target = document.getElementById('insp-start')
+    else if (endError) target = document.getElementById('insp-end')
+    else if (causeError) target = document.getElementById('insp-cause')
+    else if (checklistIncomplete) {
+      const firstMissing = checkItems.find((item) => stateOf(item.id).result === null)
+      if (firstMissing) target = document.querySelector<HTMLElement>(`input[name="check-${firstMissing.id}"]`)
+    } else if (contentError) target = document.getElementById('insp-content')
+    target?.focus()
+  }
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (submitting) return
     setAttempted(true)
     setSubmitError(null)
-    if (hasBlockingError || !startUtc || !endUtc || (!isEdit && equipmentId === null)) return
+    if (hasBlockingError || !startUtc || !endUtc || (!isEdit && equipmentId === null)) {
+      // 화면 순서상 첫 번째 오류 필드로 포커스를 옮긴다 (키보드·스크린리더 사용자가 오류 위치를 바로 찾도록)
+      focusFirstError()
+      return
+    }
 
     const checkResults: CheckResultInput[] | undefined =
       type === 'PM'
@@ -318,6 +362,7 @@ export function InspectionForm({
               id="insp-equipment"
               value={equipmentId ?? ''}
               aria-invalid={attempted && !!equipmentError}
+              aria-describedby={attempted && equipmentError ? 'insp-equipment-error' : undefined}
               onChange={(event) => {
                 setEquipmentId(event.target.value ? Number(event.target.value) : null)
                 // 설비가 바뀌면 이전 설비의 연계 알람은 무효
@@ -331,7 +376,11 @@ export function InspectionForm({
                 </option>
               ))}
             </select>
-            {attempted && equipmentError && <p className="field-error">{equipmentError}</p>}
+            {attempted && equipmentError && (
+              <p className="field-error" id="insp-equipment-error">
+                {equipmentError}
+              </p>
+            )}
           </div>
         )}
 
@@ -341,6 +390,7 @@ export function InspectionForm({
             <button
               type="button"
               data-type="PM"
+              title={GLOSSARY.PM.description}
               className={type === 'PM' ? 'active' : undefined}
               aria-pressed={type === 'PM'}
               disabled={isEdit}
@@ -351,6 +401,7 @@ export function InspectionForm({
             <button
               type="button"
               data-type="BM"
+              title={GLOSSARY.BM.description}
               className={type === 'BM' ? 'active' : undefined}
               aria-pressed={type === 'BM'}
               disabled={isEdit}
@@ -373,9 +424,14 @@ export function InspectionForm({
               value={startedAt}
               max={maxLocal}
               aria-invalid={!!startError}
+              aria-describedby={startError ? 'insp-start-error' : undefined}
               onChange={(event) => setStartedAt(event.target.value)}
             />
-            {startError && <p className="field-error">{startError}</p>}
+            {startError && (
+              <p className="field-error" id="insp-start-error">
+                {startError}
+              </p>
+            )}
           </div>
           <div className="field">
             <label htmlFor="insp-end">종료 일시</label>
@@ -385,9 +441,14 @@ export function InspectionForm({
               value={endedAt}
               max={maxLocal}
               aria-invalid={!!endError}
+              aria-describedby={endError ? 'insp-end-error' : undefined}
               onChange={(event) => setEndedAt(event.target.value)}
             />
-            {endError && <p className="field-error">{endError}</p>}
+            {endError && (
+              <p className="field-error" id="insp-end-error">
+                {endError}
+              </p>
+            )}
           </div>
           <div className="field">
             <label>소요시간</label>
@@ -430,6 +491,9 @@ export function InspectionForm({
       {type === 'PM' ? (
         <section className="form-section">
           <h2 className="form-section-title">PM 체크리스트</h2>
+          <p className="field-hint">
+            판정: OK 정상 · <Term term="NG" /> 불량 · N/A 해당 없음
+          </p>
           {!isEdit && equipmentId === null && (
             <p className="field-hint">설비를 선택하면 체크리스트가 자동으로 불러와집니다.</p>
           )}
@@ -471,6 +535,7 @@ export function InspectionForm({
                 id="insp-cause"
                 value={cause4m}
                 aria-invalid={attempted && !!causeError}
+                aria-describedby={attempted && causeError ? 'insp-cause-error' : undefined}
                 onChange={(event) => setCause4m(event.target.value as Cause4m | '')}
               >
                 <option value="">선택하세요</option>
@@ -480,7 +545,14 @@ export function InspectionForm({
                   </option>
                 ))}
               </select>
-              {attempted && causeError && <p className="field-error">{causeError}</p>}
+              <span className="field-hint">
+                <Term term="FOUR_M" />: 사람 · 설비 · 자재 · 방법 중 원인에 가까운 것을 고릅니다.
+              </span>
+              {attempted && causeError && (
+                <p className="field-error" id="insp-cause-error">
+                  {causeError}
+                </p>
+              )}
             </div>
             <div className="field">
               <label htmlFor="insp-cause-detail">상세 원인 (선택)</label>
@@ -502,7 +574,7 @@ export function InspectionForm({
           ) : equipmentId !== null ? (
             <LinkedAlarmSelect key={equipmentId} equipmentId={equipmentId} value={alarmId} onChange={setAlarmId} />
           ) : (
-            <p className="field-hint">설비를 선택하면 연계 가능한 알람(OPEN/ACK)이 표시됩니다.</p>
+            <p className="field-hint">설비를 선택하면 연계 가능한 미해결 알람이 표시됩니다.</p>
           )}
         </section>
       )}
@@ -517,10 +589,15 @@ export function InspectionForm({
             value={content}
             maxLength={5000}
             aria-invalid={attempted && !!contentError}
+            aria-describedby={attempted && contentError ? 'insp-content-error' : undefined}
             placeholder="예) 합착 롤러 진동 이상으로 정지"
             onChange={(event) => setContent(event.target.value)}
           />
-          {attempted && contentError && <p className="field-error">{contentError}</p>}
+          {attempted && contentError && (
+            <p className="field-error" id="insp-content-error">
+              {contentError}
+            </p>
+          )}
         </div>
         <div className="field">
           <label htmlFor="insp-action">조치 사항 (선택)</label>

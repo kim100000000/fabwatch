@@ -61,9 +61,12 @@ export class ApiError extends Error {
   readonly code: string
   readonly status: number
   readonly timestamp: string
+  /** 429 응답의 Retry-After 헤더(초) — 없으면 undefined */
+  readonly retryAfterSec?: number
 
-  constructor(code: string, message: string, status: number, timestamp: string) {
+  constructor(code: string, message: string, status: number, timestamp: string, retryAfterSec?: number) {
     super(message)
+    this.retryAfterSec = retryAfterSec
     this.name = 'ApiError'
     this.code = code
     this.status = status

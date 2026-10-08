@@ -41,6 +41,8 @@ export function EquipmentInspectionTabPanel({
         key={pm.schedules[0]?.id ?? 'none'}
         equipmentId={equipmentId}
         schedule={pm.schedules[0] ?? null}
+        loading={pm.loading}
+        failed={!!pm.error}
         onSaved={pm.refetch}
       />
       {pm.error && (

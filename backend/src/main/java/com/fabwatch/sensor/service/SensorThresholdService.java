@@ -5,6 +5,7 @@ import com.fabwatch.common.dto.PageResponse;
 import com.fabwatch.common.exception.BusinessException;
 import com.fabwatch.common.exception.ErrorCode;
 import com.fabwatch.common.util.Lookup;
+import com.fabwatch.common.util.PageableUtil;
 import com.fabwatch.equipment.service.EquipmentQueryService;
 import com.fabwatch.sensor.dto.SensorResponse;
 import com.fabwatch.sensor.dto.ThresholdLogResponse;
@@ -98,7 +99,7 @@ public class SensorThresholdService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND,
                         "해당 설비의 센서를 찾을 수 없습니다: equipmentId=%d, sensorId=%d".formatted(equipmentId, sensorId)));
 
-        Page<SensorThresholdLog> page = thresholdLogRepository.findBySensorIdOrderByChangedAtDesc(sensorId, pageable);
+        Page<SensorThresholdLog> page = thresholdLogRepository.findBySensorIdOrderByChangedAtDesc(sensorId, PageableUtil.ignoreSort(pageable));
         Map<Long, String> names = userQueryService.findNamesByIds(
                 page.getContent().stream().map(SensorThresholdLog::getChangedBy).filter(Objects::nonNull).toList());
         return PageResponse.of(page, log -> ThresholdLogResponse.from(log, Lookup.get(names, log.getChangedBy())));

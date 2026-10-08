@@ -29,12 +29,10 @@ export interface EquipmentSummary {
   maker?: string | null
   managerId?: number | null
   managerName?: string | null
-  /** 미해결(OPEN/ACK) 알람 수 */
-  openAlarmCount?: number
   /**
-   * PM 예정일 초과 여부 (docs/04 §3 S-1 카드 "PM지연 배지").
-   * 백엔드가 목록 응답에 이 필드를 넣어 주면 대시보드 카드에 배지가 뜬다 — 없으면 배지 미표시.
-   * ★ backend-developer 확인 필요: 목록 DTO 에 포함할지 / GET /pm-schedules?overdueOnly=true 로 별도 조회할지
+   * PM 예정일 초과 여부 — **서버 응답 필드가 아니다.**
+   * 대시보드가 GET /pm-schedules?overdueOnly=true 결과를 합쳐 넣는 클라이언트 합성 값이다 (docs/04 §3 S-1).
+   * (미해결 알람 수도 서버가 주지 않아 alarm 피처의 useOpenAlarmSummary 로 별도 집계한다)
    */
   pmOverdue?: boolean
 }
@@ -58,39 +56,24 @@ export interface EquipmentHeaderSummary {
   nextPm: HeaderValue<{ nextDueAt: string; overdue: boolean; overdueDays: number } | null>
 }
 
-/** GET /equipments/{id} 응답에 포함되는 센서 정보 */
-export interface EquipmentSensor {
-  id: number
-  type: SensorType
-  unit: string
-  warnLow?: number | null
-  warnHigh?: number | null
-  critLow?: number | null
-  critHigh?: number | null
-  /** 최신 측정값 (없을 수 있음) */
-  latestValue?: number | null
-  measuredAt?: string | null
-}
-
-/** GET /equipments/{id} 응답에 포함되는 PM 스케줄 */
-export interface EquipmentPmSchedule {
-  cycleType: PmCycleType
-  cycleValue?: number | null
-  lastDoneAt?: string | null
-  nextDueAt: string
-  /** 지연 여부 (백엔드 계산값) */
-  overdue?: boolean
-}
-
-/** GET /equipments/{id} — 상세 (기본정보 + 센서 + PM스케줄 + 미해결알람수) */
+/**
+ * GET /equipments/{id} — 상세.
+ * 서버는 기본 정보만 돌려준다(센서·PM·미해결 알람은 각 도메인 API 를 조합 — pages/EquipmentDetailPage 참고).
+ */
 export interface EquipmentDetail extends EquipmentSummary {
   /** LocalDate 'YYYY-MM-DD' (시각 아님 — 날짜 입력 필드에 그대로 쓴다) */
   installedAt?: string | null
   note?: string | null
-  sensors?: EquipmentSensor[]
-  pmSchedule?: EquipmentPmSchedule | null
-  openAlarmCount?: number
 }
+
+/**
+ * 설비별 미해결 알람 수의 비동기 상태 — 로딩/실패를 0 으로 뭉개지 않고 구분해서 표시하기 위한 타입.
+ * 알람 집계는 alarm 피처(useOpenAlarmSummary)가 하고, 조립은 pages 가 한다(피처 간 직접 참조 금지).
+ */
+export type OpenAlarmCounts =
+  | { state: 'loading' }
+  | { state: 'error' }
+  | { state: 'ready'; byEquipment: Record<number, number> }
 
 /** POST /equipments 요청 (ADMIN) — status 생략 시 백엔드가 IDLE 로 생성한다 */
 export interface EquipmentCreateRequest {

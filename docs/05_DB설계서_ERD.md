@@ -31,7 +31,18 @@ inspections ─── alarms (BM-알람 연계, nullable)
 | name | VARCHAR(50) | NN | |
 | role | ENUM('ADMIN','ENGINEER','TECHNICIAN') | NN | |
 | enabled | BOOLEAN | DEFAULT TRUE | 비활성화 |
-| refresh_token | VARCHAR(512) | NULL | 로그아웃 시 NULL |
+| ~~refresh_token~~ | — | — | **폐기(2026-10-06)**: 별도 `refresh_tokens` 테이블로 이동(아래). 기존 컬럼은 남아도 쓰지 않음 |
+
+### refresh_tokens (auth, 2026-10-06 신설 — 다중 세션·해시 저장)
+| 컬럼 | 타입 | 제약 | 설명 |
+|---|---|---|---|
+| user_id | BIGINT | NN, INDEX | 소유 사용자 (기기 1대 = 1행, 사용자당 최대 5행) |
+| token_hash | VARCHAR(64) | UNIQUE, NN | Refresh 토큰의 SHA-256 hex. **원문은 저장하지 않음** |
+| previous_token_hash / rotated_at | VARCHAR(64) / DATETIME | NULL | 직전 해시와 회전 시각 — 유예(기본 10초) 동안만 유효 |
+| expires_at | DATETIME | NN, INDEX | 14일 슬라이딩. 만료 행은 로그인 시 삭제 |
+| last_used_at | DATETIME | NN | 용량 초과 시 가장 오래 쓰지 않은 세션부터 삭제 |
+| created_at / updated_at | DATETIME | | |
+- soft delete 대상 아님(세션 상태이지 이력이 아님) — 로그아웃·만료·용량 초과 시 행을 삭제한다.
 
 ### lines / processes
 | 테이블 | 컬럼 |
@@ -76,6 +87,7 @@ inspections ─── alarms (BM-알람 연계, nullable)
 | value | DECIMAL(10,2) NN | |
 | measured_at | DATETIME(3) NN | |
 | INDEX (sensor_id, measured_at) | | 조회 핵심 인덱스 |
+| INDEX (measured_at) | | 7일 보존 배치(`DELETE … WHERE measured_at < cutoff LIMIT n`)·1분 집계 범위 스캔용. 없으면 풀스캔 — 운영 규모(약 550만 행)에서 수집 INSERT를 락 대기시킨다 (안정성 감사 H-2, docs/15 §7) |
 
 ### sensor_threshold_logs (임계치 변경 이력 — 구현 시 신설, 2026-08-10 문서 반영)
 | 컬럼 | 타입 | 설명 |
@@ -136,8 +148,8 @@ inspections ─── alarms (BM-알람 연계, nullable)
 ### checklist_items (PM 템플릿) / inspection_check_results
 | 테이블 | 컬럼 |
 |---|---|
-| checklist_items | equipment_id FK NN, item_name VARCHAR(200) NN, criteria VARCHAR(200), seq INT, active BOOLEAN |
-| inspection_check_results | inspection_id FK NN, checklist_item_id FK NN, result ENUM('OK','NG','NA') NN, note VARCHAR(300) |
+| checklist_items | equipment_id FK NN, item_name VARCHAR(200) NN, criteria VARCHAR(200), seq INT, active BOOLEAN. **INDEX (equipment_id)** — 설비별 템플릿 조회 |
+| inspection_check_results | inspection_id FK NN, checklist_item_id FK NN, result ENUM('OK','NG','NA') NN, note VARCHAR(300). **INDEX (inspection_id)** — 점검 상세의 결과 조회 |
 
 ### pm_schedules
 | 컬럼 | 타입 | 설명 |
@@ -186,7 +198,8 @@ inspections ─── alarms (BM-알람 연계, nullable)
 | sensor_id | FK NN | |
 | type | ENUM('DRIFT','SPIKE','STEP') NN | |
 | param | JSON | slope/probability/offset 등 |
-| active | BOOLEAN NN | 해제 시 FALSE |
+| active | BOOLEAN NN | 해제 시 FALSE. **자동 만료 시에도 FALSE** + `ended_at`=만료 시각 (docs/03 F-4.2) |
+| INDEX (sensor_id) | | 센서별 활성 시나리오 조회·중복 주입 검사 |
 | started_at / ended_at | DATETIME | |
 
 ## 3. 데이터 보존 정책

@@ -1,5 +1,6 @@
 import { RouterProvider, createBrowserRouter } from 'react-router-dom'
 import { AuthProvider } from './providers'
+import { RouteErrorPage } from './RouteErrorPage'
 import { AppRoutes } from './router'
 
 /**
@@ -9,6 +10,7 @@ import { AppRoutes } from './router'
 const router = createBrowserRouter([
   {
     path: '*',
+    errorElement: <RouteErrorPage />,
     element: (
       <AuthProvider>
         <AppRoutes />

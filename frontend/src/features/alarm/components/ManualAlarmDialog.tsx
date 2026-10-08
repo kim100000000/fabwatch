@@ -4,7 +4,7 @@ import { toApiError } from '@/shared/api'
 import { toUserMessage } from '@/shared/lib/errorMessage'
 import type { EquipmentSummary } from '@/features/equipment'
 import { createManualAlarm } from '../api/alarmApi'
-import { ALARM_SEVERITIES } from '../types'
+import { ALARM_SEVERITIES, ALARM_SEVERITY_LABEL } from '../types'
 import type { Alarm, AlarmSeverity } from '../types'
 import './alarm.css'
 
@@ -100,13 +100,13 @@ export function ManualAlarmDialog({
           >
             {ALARM_SEVERITIES.map((item) => (
               <option key={item} value={item}>
-                {item}
+                {ALARM_SEVERITY_LABEL[item]} ({item})
               </option>
             ))}
           </select>
           <span className="field-hint">
-            CRITICAL 로 보고하면 서버 규칙에 따라 설비 상태가 자동 DOWN 으로 기록될 수 있습니다
-            (DB 상태 기록일 뿐 실설비 제어가 아님 — docs/11 §10).
+            위험(CRITICAL)으로 보고하면 설비 상태가 자동으로 DOWN 으로 기록될 수 있습니다.
+            시스템 내 상태 기록일 뿐 실제 설비를 제어하지는 않습니다.
           </span>
         </div>
 

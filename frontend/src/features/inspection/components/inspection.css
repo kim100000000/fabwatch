@@ -55,11 +55,11 @@
   letter-spacing: 0.03em;
 }
 
-.type-badge[data-type='PM'] { color: var(--status-pm); }
-.type-badge[data-type='BM'] { color: var(--status-down); }
+.type-badge[data-type='PM'] { color: var(--text-pm); }
+.type-badge[data-type='BM'] { color: var(--text-down); }
 
 .ng-flag {
-  color: var(--status-down);
+  color: var(--text-down);
   font-weight: 700;
 }
 
@@ -98,7 +98,7 @@
 }
 
 .check-result[data-result='OK'] { color: var(--status-run); }
-.check-result[data-result='NG'] { color: var(--status-down); font-weight: 700; }
+.check-result[data-result='NG'] { color: var(--text-down); font-weight: 700; }
 .check-result[data-result='NA'] { color: var(--text-secondary); }
 
 .check-table td {
@@ -169,7 +169,7 @@
 
 .field-error {
   margin: 0;
-  color: var(--alarm-critical);
+  color: var(--text-critical);
   font-size: 12px;
 }
 
@@ -260,7 +260,7 @@
 }
 .result-radios label[data-checked='true'][data-result='NG'] {
   border-color: var(--status-down);
-  color: var(--status-down);
+  color: var(--text-down);
   font-weight: 700;
 }
 .result-radios label[data-checked='true'][data-result='NA'] {
@@ -296,7 +296,7 @@
   padding: 10px 12px;
   border: 1px solid var(--status-down);
   border-radius: var(--radius);
-  color: var(--status-down);
+  color: var(--text-down);
   font-size: 13px;
 }
 
@@ -337,7 +337,7 @@
 }
 
 .pm-overdue-text {
-  color: var(--status-down);
+  color: var(--text-down);
   font-weight: 700;
 }
 

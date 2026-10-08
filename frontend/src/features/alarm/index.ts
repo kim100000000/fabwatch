@@ -1,12 +1,16 @@
 export {
   fetchAlarms,
   fetchUnresolvedAlarmCount,
+  fetchOpenAlarmSummary,
+  fetchUnresolvedAlarms,
   ackAlarm,
   resolveAlarm,
   createManualAlarm,
 } from './api/alarmApi'
 export { useUnresolvedAlarmCount } from './api/useUnresolvedAlarmCount'
 export type { UnresolvedAlarmCountResult } from './api/useUnresolvedAlarmCount'
+export { useOpenAlarmSummary } from './api/useOpenAlarmSummary'
+export type { OpenAlarmSummaryResult } from './api/useOpenAlarmSummary'
 export { useAlarmList } from './api/useAlarmList'
 export type { AlarmListResult } from './api/useAlarmList'
 export { AlarmTable } from './components/AlarmTable'
@@ -19,8 +23,13 @@ export {
   ALARM_SEVERITIES,
   ALARM_STATUSES,
   ALARM_STATUS_LABEL,
+  ALARM_SEVERITY_LABEL,
   ALARM_TYPE_LABEL,
   EMPTY_ALARM_FILTER,
+  DEFAULT_ALARM_FILTER,
+  alarmMatchesFilter,
+  mergeAlarms,
+  inspectionRegisterPath,
   alarmFromEvent,
   compareAlarms,
   isUnresolved,
@@ -31,9 +40,11 @@ export type {
   AlarmEventPayload,
   AlarmSeverity,
   AlarmStatus,
+  AlarmStatusFilter,
   AlarmType,
   AlarmFilterValue,
   AlarmListFilter,
   AlarmResolveRequest,
   ManualAlarmRequest,
+  OpenAlarmSummary,
 } from './types'

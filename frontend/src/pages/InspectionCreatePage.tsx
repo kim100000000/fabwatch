@@ -6,8 +6,9 @@ import {
   useEquipmentList,
 } from '@/features/equipment'
 import { InspectionForm } from '@/features/inspection'
-import type { InspectionDetail } from '@/features/inspection'
+import type { InspectionDetail, InspectionType } from '@/features/inspection'
 import { toApiError } from '@/shared/api'
+import { usePageTitle } from '@/shared/hooks/usePageTitle'
 import { statusLabel } from '@/shared/lib/equipmentStatus'
 import { toUserMessage } from '@/shared/lib/errorMessage'
 import { ErrorState, LoadingBlock, Modal, Spinner } from '@/shared/ui'
@@ -31,6 +32,14 @@ export function InspectionCreatePage() {
   const equipmentIdParam = Number(searchParams.get('equipmentId'))
   const defaultEquipmentId =
     Number.isInteger(equipmentIdParam) && equipmentIdParam > 0 ? equipmentIdParam : null
+
+  // 알람 센터의 '점검 등록' 바로가기: ?alarmId= 면 BM + 해당 알람 연계, ?type=PM|BM 이면 유형만 사전 선택
+  const alarmIdParam = Number(searchParams.get('alarmId'))
+  const defaultAlarmId = Number.isInteger(alarmIdParam) && alarmIdParam > 0 ? alarmIdParam : null
+  const typeParam = searchParams.get('type')
+  const defaultType: InspectionType | null = typeParam === 'PM' || typeParam === 'BM' ? typeParam : null
+
+  usePageTitle('점검 이력 등록')
 
   const { equipments, loading, error, refetch } = useEquipmentList({ size: 100 })
 
@@ -111,6 +120,8 @@ export function InspectionCreatePage() {
             mode="create"
             equipments={equipments}
             defaultEquipmentId={defaultEquipmentId}
+            defaultType={defaultType}
+            defaultAlarmId={defaultAlarmId}
             onSaved={(saved) => void handleSaved(saved)}
             onCancel={() => navigate('/inspections')}
           />

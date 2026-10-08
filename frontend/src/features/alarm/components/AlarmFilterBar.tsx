@@ -1,6 +1,12 @@
 import type { EquipmentSummary } from '@/features/equipment'
-import { ALARM_SEVERITIES, ALARM_STATUSES, ALARM_STATUS_LABEL, EMPTY_ALARM_FILTER } from '../types'
-import type { AlarmFilterValue, AlarmSeverity, AlarmStatus } from '../types'
+import {
+  ALARM_SEVERITIES,
+  ALARM_SEVERITY_LABEL,
+  ALARM_STATUSES,
+  ALARM_STATUS_LABEL,
+  DEFAULT_ALARM_FILTER,
+} from '../types'
+import type { AlarmFilterValue, AlarmSeverity, AlarmStatusFilter } from '../types'
 import './alarm.css'
 
 interface AlarmFilterBarProps {
@@ -37,15 +43,16 @@ export function AlarmFilterBar({ value, onChange, equipments }: AlarmFilterBarPr
         <label htmlFor="alarm-filter-status">상태</label>
         <select
           id="alarm-filter-status"
-          value={value.status ?? ''}
+          value={value.status ?? 'ALL'}
           onChange={(event) =>
-            update({ status: event.target.value ? (event.target.value as AlarmStatus) : null })
+            update({ status: event.target.value === 'ALL' ? null : (event.target.value as AlarmStatusFilter) })
           }
         >
-          <option value="">전체</option>
+          <option value="UNRESOLVED">미해결 (발생+확인)</option>
+          <option value="ALL">전체</option>
           {ALARM_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {status} ({ALARM_STATUS_LABEL[status]})
+              {ALARM_STATUS_LABEL[status]} ({status})
             </option>
           ))}
         </select>
@@ -63,7 +70,7 @@ export function AlarmFilterBar({ value, onChange, equipments }: AlarmFilterBarPr
           <option value="">전체</option>
           {ALARM_SEVERITIES.map((severity) => (
             <option key={severity} value={severity}>
-              {severity}
+              {ALARM_SEVERITY_LABEL[severity]} ({severity})
             </option>
           ))}
         </select>
@@ -92,7 +99,7 @@ export function AlarmFilterBar({ value, onChange, equipments }: AlarmFilterBarPr
       </div>
 
       <div className="filter-actions">
-        <button type="button" className="btn btn-ghost" onClick={() => onChange(EMPTY_ALARM_FILTER)}>
+        <button type="button" className="btn btn-ghost" onClick={() => onChange(DEFAULT_ALARM_FILTER)}>
           초기화
         </button>
       </div>

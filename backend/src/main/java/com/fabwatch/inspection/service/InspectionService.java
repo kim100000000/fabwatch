@@ -169,6 +169,7 @@ public class InspectionService {
             newHasNg = validateCheckResults(inspection.getEquipmentId(), inspection.getType(), request.checkResults());
         }
 
+        Instant oldEndedAt = inspection.getEndedAt();
         inspection.update(shift, request.startedAt(), request.endedAt(),
                 durationMin(request.startedAt(), request.endedAt()), request.content(), request.actionTaken(),
                 bm ? request.cause4m() : null, bm ? request.causeDetail() : null);
@@ -179,6 +180,9 @@ public class InspectionService {
             checkResultRepository.flush();
             saveCheckResults(id, request.checkResults());
             inspection.changeHasNg(newHasNg);
+        }
+        if (inspection.getType() == Inspection.Type.PM && !Objects.equals(oldEndedAt, inspection.getEndedAt())) {
+            refreshPmScheduleAfterEdit(inspection, oldEndedAt, actorId);
         }
         log.info("점검 이력 수정: id={}, by={}", id, actorId);
         return toDetail(inspection);
@@ -270,6 +274,45 @@ public class InspectionService {
                     PmScheduleCalculator.nextDueAt(schedule.getCycleType(), schedule.getCycleValue(), doneAt));
             return true;
         }).orElse(false);
+    }
+
+    /**
+     * PM 이력의 종료 시각(endedAt)을 수정한 뒤 스케줄 재계산 (안정성 감사 M-11).
+     *
+     * 규칙(생성 시 "과거 소급 등록은 스케줄을 되돌리지 않는다"와 일관):
+     * - 수정한 이력이 스케줄의 **마지막 수행**(last_done_at == 수정 전 endedAt)이었거나, 수정 후 endedAt이 last_done_at **보다 늦어져**
+     *   새 마지막 수행이 되는 경우에만 스케줄을 건드린다. 마지막 수행과 무관한 과거 이력 수정은 스케줄에 영향이 없다.
+     * - 건드릴 때 새 last_done_at = 그 설비 PM 이력 중 가장 늦은 endedAt(수정 반영 후). 즉 되돌림은 "직전 PM 수행 시각"까지만
+     *   허용된다(그보다 더 과거로는 갈 수 없음). next_due_at은 새 last_done_at 기준으로 재계산하고 지연 알람 플래그를 초기화한다.
+     * - last_done_at이 앞으로 당겨진 게 아니라 **늦춰진** 경우(= PM이 더 최근에 수행된 것으로 정정)에는 생성 때와 같이
+     *   미해결 PM 지연 알람을 자동 해소한다. 되돌려진 경우에는 알람을 새로 만들지 않는다(다음 지연 배치가 판정).
+     * 스케줄이 없는 설비는 건너뛴다.
+     */
+    private void refreshPmScheduleAfterEdit(Inspection inspection, Instant oldEndedAt, Long actorId) {
+        pmScheduleRepository.findByEquipmentId(inspection.getEquipmentId()).ifPresent(schedule -> {
+            Instant lastDone = schedule.getLastDoneAt();
+            Instant newEndedAt = inspection.getEndedAt();
+            boolean wasLast = lastDone != null && lastDone.equals(oldEndedAt);
+            boolean becomesLast = lastDone == null || newEndedAt.isAfter(lastDone);
+            if (!wasLast && !becomesLast) {
+                return;
+            }
+            // update()가 만든 변경은 JPQL 실행 전에 자동 flush되어 새 값이 반영된다
+            Instant latest = inspectionRepository
+                    .findLatestEndedAt(inspection.getEquipmentId(), Inspection.Type.PM).orElse(newEndedAt);
+            if (latest.equals(lastDone)) {
+                return;
+            }
+            boolean movedLater = lastDone == null || latest.isAfter(lastDone);
+            schedule.markDone(latest,
+                    PmScheduleCalculator.nextDueAt(schedule.getCycleType(), schedule.getCycleValue(), latest));
+            log.info("PM 이력 수정에 따른 스케줄 재계산: equipmentId={}, lastDoneAt {} → {}, nextDueAt={}",
+                    inspection.getEquipmentId(), lastDone, latest, schedule.getNextDueAt());
+            if (movedLater) {
+                alarmCommandService.resolvePmOverdueByEquipment(inspection.getEquipmentId(), actorId,
+                        "PM 점검 이력 #%d 수정으로 수행 시각 정정".formatted(inspection.getId()));
+            }
+        });
     }
 
     private static boolean canEdit(Inspection inspection, Long actorId, String actorRole) {

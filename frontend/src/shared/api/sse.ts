@@ -32,8 +32,10 @@ export interface UseSseOptions {
   onPoll?: (signal: AbortSignal) => Promise<void> | void
   /** 폴백 폴링 주기 (기본 3초 — CLAUDE.md 우회 규칙) */
   pollIntervalMs?: number
-  /** 폴백 상태에서 SSE 재연결을 시도하는 주기 (기본 30초) */
+  /** 폴백 상태에서 SSE 재연결을 시도하는 주기 (기본 30초, ±30% 지터가 붙는다) */
   retryIntervalMs?: number
+  /** 연결은 살아 있는데 이 시간 동안 이벤트가 없으면 '지연'으로 보고 폴링을 병행한다 (기본 20초) */
+  staleAfterMs?: number
 }
 
 export interface SseState {
@@ -42,7 +44,17 @@ export interface SseState {
   connected: boolean
   /** 마지막 이벤트 수신 시각 (ms epoch) — 화면 상단 "실시간" 표시에 사용 */
   lastEventAt: number | null
+  /** SSE 연결은 열려 있으나 일정 시간 이벤트가 오지 않는 상태 — 폴링으로 보강 중이다 */
+  stale: boolean
 }
+
+/** 재연결 주기에 지터를 더한다 — 서버 재기동 직후 모든 탭이 동시에 몰리는 것을 막는다 */
+function withJitter(delayMs: number): number {
+  return Math.round(delayMs * (1 + Math.random() * 0.3))
+}
+
+/** 무수신 감시 주기 */
+const WATCHDOG_INTERVAL_MS = 5_000
 
 /** null/undefined/빈 문자열을 제외한 쿼리 문자열을 만든다 ('' 또는 '?a=1' 형태) */
 function buildQuery(params?: Record<string, string | number | null | undefined>): string {
@@ -65,10 +77,12 @@ export function useSse(options: UseSseOptions): SseState {
     onPoll,
     pollIntervalMs = 3_000,
     retryIntervalMs = 30_000,
+    staleAfterMs = 20_000,
   } = options
 
   const [mode, setMode] = useState<SseMode>('IDLE')
   const [lastEventAt, setLastEventAt] = useState<number | null>(null)
+  const [stale, setStale] = useState(false)
   // 센서 이벤트는 2초 주기로 설비×센서 수만큼 쏟아진다 —
   // 표시용 lastEventAt 때문에 매 이벤트마다 리렌더가 나지 않도록 1초로 throttle 한다.
   const lastEventRef = useRef<number>(0)
@@ -96,6 +110,10 @@ export function useSse(options: UseSseOptions): SseState {
     let pollTimer: ReturnType<typeof setInterval> | null = null
     let retryTimer: ReturnType<typeof setTimeout> | null = null
     let pollController: AbortController | null = null
+    let watchdogTimer: ReturnType<typeof setInterval> | null = null
+    // 무수신 감시용 — 연결 직후/이벤트 수신 시 갱신 (상태 갱신과 무관하게 매 이벤트 기록)
+    let lastReceivedAt = Date.now()
+    let isStale = false
 
     const clearRetry = () => {
       if (retryTimer) {
@@ -111,6 +129,13 @@ export function useSse(options: UseSseOptions): SseState {
       }
       pollController?.abort()
       pollController = null
+    }
+
+    const stopWatchdog = () => {
+      if (watchdogTimer) {
+        clearInterval(watchdogTimer)
+        watchdogTimer = null
+      }
     }
 
     const closeSource = () => {
@@ -135,9 +160,10 @@ export function useSse(options: UseSseOptions): SseState {
       })()
     }
 
-    const startPolling = (reason: string) => {
-      if (disposed || pollTimer) return
-      setMode('POLLING')
+    const startPolling = (reason: string, switchMode = true) => {
+      if (disposed) return
+      if (switchMode) setMode('POLLING')
+      if (pollTimer) return
       console.warn(
         `[SSE] ${path} 연결 불가 → ${pollIntervalMs}ms 폴링 폴백으로 전환합니다 (사유: ${reason})`,
       )
@@ -150,7 +176,28 @@ export function useSse(options: UseSseOptions): SseState {
       retryTimer = setTimeout(() => {
         retryTimer = null
         connect()
-      }, delayMs)
+      }, withJitter(delayMs))
+    }
+
+    // 연결이 살아 있어도 이벤트가 안 오면(프록시 버퍼링·서버 정지 등) 화면이 조용히 낡는다 — 감지해서 폴링을 병행한다
+    const startWatchdog = () => {
+      stopWatchdog()
+      lastReceivedAt = Date.now()
+      watchdogTimer = setInterval(() => {
+        if (disposed || isStale || !source) return
+        if (Date.now() - lastReceivedAt > staleAfterMs) {
+          isStale = true
+          setStale(true)
+          startPolling(`${staleAfterMs}ms 동안 SSE 이벤트 무수신`, false)
+        }
+      }, WATCHDOG_INTERVAL_MS)
+    }
+
+    const clearStale = () => {
+      if (!isStale) return
+      isStale = false
+      setStale(false)
+      stopPolling()
     }
 
     function connect(): void {
@@ -180,6 +227,9 @@ export function useSse(options: UseSseOptions): SseState {
         if (disposed) return
         stopPolling()
         clearRetry()
+        isStale = false
+        setStale(false)
+        startWatchdog()
         setMode('SSE')
         console.info(`[SSE] ${path} 연결됨 — 실시간 수신 시작`)
       }
@@ -187,7 +237,11 @@ export function useSse(options: UseSseOptions): SseState {
       eventSource.onerror = () => {
         if (disposed) return
         // 브라우저 자동 재연결에 맡기지 않고 직접 닫은 뒤 폴백/재시도를 제어한다.
+        // (서버가 오래된 연결을 닫거나 429 로 거절하는 경우도 여기로 온다 — 폴링으로 내려가 주기적으로 재연결한다)
         closeSource()
+        stopWatchdog()
+        isStale = false
+        setStale(false)
         startPolling('SSE 연결 오류(백엔드 미기동 또는 네트워크 장애)')
         scheduleRetry()
       }
@@ -204,6 +258,8 @@ export function useSse(options: UseSseOptions): SseState {
             try {
               handler(JSON.parse(raw))
               const now = Date.now()
+              lastReceivedAt = now
+              clearStale()
               if (now - lastEventRef.current >= 1_000) {
                 lastEventRef.current = now
                 setLastEventAt(now)
@@ -220,10 +276,11 @@ export function useSse(options: UseSseOptions): SseState {
     return () => {
       disposed = true
       closeSource()
+      stopWatchdog()
       stopPolling()
       clearRetry()
     }
-  }, [path, query, eventNames, enabled, pollIntervalMs, retryIntervalMs])
+  }, [path, query, eventNames, enabled, pollIntervalMs, retryIntervalMs, staleAfterMs])
 
-  return { mode, connected: mode === 'SSE', lastEventAt }
+  return { mode, connected: mode === 'SSE' && !stale, lastEventAt, stale }
 }

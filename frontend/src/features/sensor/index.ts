@@ -12,6 +12,8 @@ export { useLatestSensors } from './api/useLatestSensors'
 export type { LatestSensorsResult } from './api/useLatestSensors'
 export { useSensorHistory } from './api/useSensorHistory'
 export { useSensorStream } from './api/useSensorStream'
+export { useSensorFeed } from './api/useSensorFeed'
+export type { SensorFeed } from './api/useSensorFeed'
 export type { SensorStreamHandlers } from './api/useSensorStream'
 export { SensorLiveChart } from './components/SensorLiveChart'
 export { SensorHistoryChart } from './components/SensorHistoryChart'
@@ -30,12 +32,14 @@ export {
   HISTORY_RANGES,
   LIVE_MAX_POINTS,
   LIVE_WINDOW_MINUTES,
+  SENSOR_LEVEL_LABEL,
   SENSOR_TYPE_LABEL,
   SENSOR_TYPE_ORDER,
   THRESHOLD_REASON_MAX,
   compareSensorType,
   summarizeSensorTypes,
   levelOf,
+  thresholdLines,
 } from './types'
 export type {
   SensorLevel,
@@ -54,4 +58,5 @@ export type {
   SensorEventPayload,
   EquipmentStatusEventPayload,
   LivePoint,
+  ThresholdLine,
 } from './types'

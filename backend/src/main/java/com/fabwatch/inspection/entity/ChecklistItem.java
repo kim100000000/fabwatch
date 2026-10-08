@@ -3,6 +3,7 @@ package com.fabwatch.inspection.entity;
 import com.fabwatch.common.entity.SoftDeletableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -15,7 +16,8 @@ import org.hibernate.annotations.SQLRestriction;
  * PM 체크리스트 템플릿 항목 (docs/05 checklist_items, docs/03 F-3.2).
  */
 @Entity
-@Table(name = "checklist_items")
+@Table(name = "checklist_items",
+        indexes = @Index(name = "idx_checklist_item_equipment", columnList = "equipment_id"))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @SQLDelete(sql = "UPDATE checklist_items SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")

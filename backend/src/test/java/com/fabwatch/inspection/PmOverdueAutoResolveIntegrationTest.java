@@ -7,7 +7,6 @@ import com.fabwatch.inspection.entity.Inspection;
 import com.fabwatch.inspection.entity.PmSchedule;
 import com.fabwatch.inspection.repository.PmScheduleRepository;
 import com.fabwatch.inspection.service.InspectionService;
-import com.fabwatch.inspection.service.PmOverdueService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,8 +33,6 @@ class PmOverdueAutoResolveIntegrationTest {
 
     @Autowired
     private InspectionService inspectionService;
-    @Autowired
-    private PmOverdueService pmOverdueService;
     @Autowired
     private PmScheduleRepository pmScheduleRepository;
     @Autowired
@@ -111,18 +108,37 @@ class PmOverdueAutoResolveIntegrationTest {
     }
 
     @Test
-    @DisplayName("해소 후 스케줄이 다시 3일 초과되면 새 PM_OVERDUE 알람이 생성된다 (중복 억제에 안 걸림)")
-    void newOverdueAlarmAfterResolve() {
+    @DisplayName("PM 이력 종료 시각 수정(실제 JPQL 자동 flush) — 마지막 수행을 늦추면 스케줄 재계산, 앞당기면 직전 PM 시각까지만 되돌림")
+    void editPmEndedAtRecalculatesSchedule() {
         overdueSchedule(lami01);
-        pmOverdueAlarm(lami01, Alarm.Status.OPEN);
-        inspectionService.create(pm(lami01), workerId);
-        assertThat(unresolved(lami01)).isEmpty();
+        // 직전 PM(10일 전) → 최신 PM(1시간 전, 마지막 수행) 순으로 등록
+        Instant previousEnded = Instant.now().minus(10, ChronoUnit.DAYS);
+        var previous = inspectionService.create(new InspectionCreateRequest(lami01, Inspection.Type.PM, null,
+                previousEnded.minus(2, ChronoUnit.HOURS), previousEnded, "직전 PM", null, null, null, null, null), workerId);
+        assertThat(previous.id()).isNotNull();
+        var latest = inspectionService.create(pm(lami01), workerId);
+        Instant latestEnded = pmScheduleRepository.findByEquipmentId(lami01).orElseThrow().getLastDoneAt();
+        assertThat(latestEnded).isEqualTo(latest.endedAt());
 
-        // PM 수행 후 주기(DAILY)가 지나고 3일 더 경과한 시점 — 스케줄러가 다시 이벤트를 발행
-        pmOverdueService.publishOverdueEvents(Instant.now().plus(10, ChronoUnit.DAYS));
+        // 1) 최신 PM의 종료를 30분 늦춤 → 스케줄 last_done도 그 시각으로
+        Instant later = latestEnded.plus(30, ChronoUnit.MINUTES).isAfter(Instant.now()) ? Instant.now().minusSeconds(5)
+                : latestEnded.plus(30, ChronoUnit.MINUTES);
+        inspectionService.update(latest.id(), new com.fabwatch.inspection.dto.InspectionUpdateRequest(
+                null, later.minus(2, ChronoUnit.HOURS), later, "수정", null, null, null, null), workerId, "TECHNICIAN");
+        PmSchedule afterLater = pmScheduleRepository.findByEquipmentId(lami01).orElseThrow();
+        assertThat(afterLater.getLastDoneAt()).isEqualTo(later);
+        assertThat(afterLater.getNextDueAt()).isAfter(later);
 
-        assertThat(unresolved(lami01)).hasSize(1);
+        // 2) 최신 PM의 종료를 30일 전으로 크게 앞당김 → 직전 PM(10일 전) 시각까지만 되돌아간다
+        Instant farBack = Instant.now().minus(30, ChronoUnit.DAYS);
+        inspectionService.update(latest.id(), new com.fabwatch.inspection.dto.InspectionUpdateRequest(
+                null, farBack.minus(2, ChronoUnit.HOURS), farBack, "수정", null, null, null, null), workerId, "TECHNICIAN");
+        PmSchedule afterEarlier = pmScheduleRepository.findByEquipmentId(lami01).orElseThrow();
+        assertThat(afterEarlier.getLastDoneAt()).isEqualTo(previousEnded);
     }
+
+    // "해소 후 다시 3일 초과되면 새 알람 생성" 케이스는 PmOverdueIntegrationTest (3d)로 옮겼다 —
+    // PmOverdueService가 스케줄마다 REQUIRES_NEW 트랜잭션을 쓰므로 클래스 @Transactional(미커밋 데이터)에서는 검증할 수 없다.
 
     // ------------------------------------------------------------ 헬퍼
 

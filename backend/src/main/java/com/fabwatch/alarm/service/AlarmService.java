@@ -15,6 +15,8 @@ import com.fabwatch.common.event.SensorLevel;
 import com.fabwatch.common.event.ThresholdExceededEvent;
 import com.fabwatch.common.exception.BusinessException;
 import com.fabwatch.common.exception.ErrorCode;
+import com.fabwatch.common.util.LogSanitizer;
+import com.fabwatch.common.util.PageableUtil;
 import com.fabwatch.common.util.Lookup;
 import com.fabwatch.equipment.service.EquipmentQueryService;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -54,12 +57,23 @@ public class AlarmService implements AlarmCommandService {
     /**
      * 임계치 초과 → 알람 생성 (docs/03 F-4.3).
      * 2초마다 계속 들어오지만 중복 억제로 첫 1건만 만들어진다.
+     *
+     * 이벤트마다 **자체 새 트랜잭션**(REQUIRES_NEW)이다 — 수집 틱의 원본 저장은 이미 커밋돼 있고, 한 센서의 알람 처리 실패가
+     * 다른 센서의 알람을 롤백시키지 않는다(안정성 감사 H-3). 알람 저장과 CRITICAL 자동 DOWN(EquipmentDownRequestedEvent의
+     * 동기 리스너)은 이 트랜잭션 하나에서 함께 커밋/롤백된다 — 따로 커밋하면 "알람은 있는데 DOWN은 실패"한 뒤
+     * 중복 억제 때문에 DOWN이 영영 재시도되지 않는 상태가 생기기 때문이다. SSE(alarm/status)는 커밋 후에 나간다.
      */
     @EventListener
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onThresholdExceeded(ThresholdExceededEvent event) {
         Alarm.Severity severity = toSeverity(event.level());
         if (severity == null) {
+            return;
+        }
+        // 억제 판정을 먼저 한다 — 2초마다 들어오는 대부분의 이벤트는 억제되므로 설비 코드 조회·메시지 조립을 아낀다 (L-1)
+        if (isSuppressed(event.equipmentId(), event.sensorId(), severity)) {
+            log.debug("알람 중복 억제: equipmentId={}, sensorId={}, severity={}",
+                    event.equipmentId(), event.sensorId(), severity);
             return;
         }
         String message = "%s %s %s (%s %s)".formatted(
@@ -69,7 +83,7 @@ public class AlarmService implements AlarmCommandService {
                 event.value(),
                 event.unit() == null ? "" : event.unit()).trim();
 
-        raise(Alarm.builder()
+        persist(Alarm.builder()
                 .equipmentId(event.equipmentId())
                 .sensorId(event.sensorId())
                 .alarmType(Alarm.Type.SENSOR_THRESHOLD)
@@ -184,7 +198,8 @@ public class AlarmService implements AlarmCommandService {
     }
 
     /**
-     * 알람 생성 공통 경로 — 중복 억제 + CRITICAL 자동 DOWN + SSE 발행이 전부 여기를 지난다.
+     * 알람 생성 공통 경로 — 중복 억제 + CRITICAL 자동 DOWN + SSE 발행이 전부 여기를 지난다
+     * (센서 임계치 경로는 억제 판정을 앞당겨 한 뒤 {@link #persist}로 직행).
      *
      * @return 생성된 알람. 중복 억제로 생성하지 않았으면 null.
      */
@@ -194,9 +209,17 @@ public class AlarmService implements AlarmCommandService {
                     candidate.getEquipmentId(), candidate.getSensorId(), candidate.getSeverity());
             return null;
         }
+        return persist(candidate, sensorType);
+    }
+
+    /**
+     * 억제 판정을 이미 통과한 알람을 저장하고 후속 이벤트를 발행한다 (저장 → AlarmRaisedEvent → CRITICAL이면 DOWN 요청).
+     * 센서 임계치 경로는 설비 코드 조회·메시지 조립을 아끼려고 억제 판정을 먼저 하고 곧바로 이 메서드를 부른다.
+     */
+    private Alarm persist(Alarm candidate, String sensorType) {
         Alarm saved = alarmRepository.save(candidate);
         log.info("알람 생성: id={}, equipmentId={}, severity={}, message={}",
-                saved.getId(), saved.getEquipmentId(), saved.getSeverity(), saved.getMessage());
+                saved.getId(), saved.getEquipmentId(), saved.getSeverity(), LogSanitizer.clean(saved.getMessage()));
 
         String equipmentCode = equipmentQueryService.findCodeById(saved.getEquipmentId()).orElse(null);
         eventPublisher.publishEvent(new AlarmRaisedEvent(
@@ -241,8 +264,9 @@ public class AlarmService implements AlarmCommandService {
     @Transactional(readOnly = true)
     public PageResponse<AlarmResponse> getAlarms(Long equipmentId, Alarm.Status status, Alarm.Severity severity,
                                                  Instant from, Instant to, Pageable pageable) {
+        // 정렬은 Specification이 고정(OPEN 우선 → 최신순)한다. 클라이언트 sort는 무시 — ?sort=foo가 500이 되지 않게
         Page<Alarm> page = alarmRepository.findAll(
-                AlarmSpecifications.filter(equipmentId, status, severity, from, to), pageable);
+                AlarmSpecifications.filter(equipmentId, status, severity, from, to), PageableUtil.ignoreSort(pageable));
 
         Map<Long, String> equipmentCodes = equipmentQueryService.findCodesByIds(
                 page.getContent().stream().map(Alarm::getEquipmentId).toList());

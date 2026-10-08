@@ -43,6 +43,7 @@ export function ReportEditor({ value, onChange, disabled = false }: ReportEditor
           aria-controls="report-editor-panel-edit"
           tabIndex={tab === 'edit' ? 0 : -1}
           className={tab === 'edit' ? 'active' : undefined}
+          aria-pressed={tab === 'edit'}
           onClick={() => setTab('edit')}
           onKeyDown={handleTabKeyDown}
         >
@@ -56,6 +57,7 @@ export function ReportEditor({ value, onChange, disabled = false }: ReportEditor
           aria-controls="report-editor-panel-preview"
           tabIndex={tab === 'preview' ? 0 : -1}
           className={tab === 'preview' ? 'active' : undefined}
+          aria-pressed={tab === 'preview'}
           onClick={() => setTab('preview')}
           onKeyDown={handleTabKeyDown}
         >

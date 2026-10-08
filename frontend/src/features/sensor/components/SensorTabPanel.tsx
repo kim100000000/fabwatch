@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '@/app/providers/useAuth'
-import type { EquipmentSensor } from '@/features/equipment'
 import { EmptyState, ErrorState, LoadingBlock, StreamStatusBadge } from '@/shared/ui'
 import { useEquipmentSensors } from '../api/useEquipmentSensors'
 import { useLatestSensors } from '../api/useLatestSensors'
-import { useSensorStream } from '../api/useSensorStream'
-import { LIVE_MAX_POINTS, LIVE_WINDOW_MINUTES, SENSOR_TYPE_LABEL, compareSensorType } from '../types'
+import { fetchSensorSeries } from '../api/sensorApi'
+import type { SensorFeed } from '../api/useSensorFeed'
+import { minutesAgoIso } from '@/shared/lib/datetime'
+import { LIVE_MAX_POINTS, LIVE_WINDOW_MINUTES, SENSOR_TYPE_LABEL, compareSensorType, levelOf } from '../types'
+import type { SensorType } from '@/features/equipment'
 import type { LivePoint, SensorDefinition, SensorEventPayload, SensorLatest } from '../types'
 import { SensorLiveChart } from './SensorLiveChart'
 import { SensorHistoryChart } from './SensorHistoryChart'
@@ -15,34 +17,18 @@ import './sensor.css'
 
 interface SensorTabPanelProps {
   equipmentId: number
-  /** GET /equipments/{id} 가 준 센서 정보 — 임계치·단위의 출처 */
-  sensors?: EquipmentSensor[]
-}
-
-/** 상세 응답의 센서 정보를 실시간 표시용 shape 로 맞춘다 (id 필드명이 sensorId 로 다름) */
-function toSensorLatest(sensor: EquipmentSensor, equipmentId: number): SensorLatest {
-  return {
-    sensorId: sensor.id,
-    equipmentId,
-    sensorType: sensor.type,
-    unit: sensor.unit,
-    value: sensor.latestValue ?? null,
-    measuredAt: sensor.measuredAt ?? null,
-    warnLow: sensor.warnLow,
-    warnHigh: sensor.warnHigh,
-    critLow: sensor.critLow,
-    critHigh: sensor.critHigh,
-  }
+  /** 페이지 수준에서 연 SSE 연결의 피드 — 센서 이벤트/폴백 폴링을 구독한다 */
+  feed: SensorFeed
 }
 
 /**
  * S-3 센서 탭 (docs/04 §3, docs/03 F-5.2).
  * - 상단: 센서별 실시간 차트 2×2 (SSE 수신, 최근 5분 / 최대 150포인트 슬라이딩)
  * - 하단: 기간 선택 이력 차트 (1시간/24시간/7일, RAW/1M 은 서버 판단)
- * SSE 연결은 이 컴포넌트에서 1개만 열고 차트들에 값을 나눠 준다(차트마다 연결하지 않는다).
+ * SSE 연결은 페이지에서 1개만 열고(useSensorFeed) 이 패널이 구독해 차트들에 값을 나눠 준다(차트마다 연결하지 않는다).
  * 각 센서 카드에는 임계치 버튼이 붙는다 (FR-2.3): ADMIN=[임계치 설정] 다이얼로그, 그 외 역할=[임계치 이력] 조회 전용.
  */
-export function SensorTabPanel({ equipmentId, sensors }: SensorTabPanelProps) {
+export function SensorTabPanel({ equipmentId, feed }: SensorTabPanelProps) {
   const { user } = useAuth()
   // 임계치 수정은 ADMIN 전용 (docs/06 §3) — 서버도 ENGINEER/TECHNICIAN 을 403 으로 막는다
   const canEditThreshold = user?.role === 'ADMIN'
@@ -88,6 +74,57 @@ export function SensorTabPanel({ equipmentId, sensors }: SensorTabPanelProps) {
     })
   }, [])
 
+  // 차트 초기 프리로드: 탭 진입 시 최근 5분 원본을 받아 슬라이딩 버퍼를 채운다 (실패해도 실시간 수신은 그대로 동작)
+  const sensorTypeKey = (sensorsByEquipment[equipmentId] ?? []).map((sensor) => sensor.sensorType).join(',')
+  useEffect(() => {
+    if (!sensorTypeKey) return
+    const controller = new AbortController()
+    const from = minutesAgoIso(LIVE_WINDOW_MINUTES)
+    const to = new Date().toISOString()
+
+    void Promise.allSettled(
+      sensorTypeKey
+        .split(',')
+        .map((type) =>
+          fetchSensorSeries(equipmentId, { sensorType: type as SensorType, from, to }, controller.signal),
+        ),
+    ).then((results) => {
+      if (controller.signal.aborted) return
+      const loaded: Record<number, LivePoint[]> = {}
+      results.forEach((result) => {
+        // 5분(<=1시간)은 서버가 RAW 로 준다. 집계(1M)가 오면 간격이 달라 슬라이딩 버퍼에 섞지 않는다.
+        if (result.status !== 'fulfilled' || result.value.granularity !== 'RAW') return
+        result.value.series.forEach((series) => {
+          loaded[series.sensorId] = series.points
+            .map((point) => ({
+              t: new Date(point.at).getTime(),
+              value: point.value,
+              level: levelOf(point.value, series),
+            }))
+            .filter((point) => !Number.isNaN(point.t))
+        })
+      })
+
+      const cutoff = Date.now() - LIVE_WINDOW_MINUTES * 60_000
+      setLivePoints((previous) => {
+        const next = { ...previous }
+        Object.entries(loaded).forEach(([sensorId, points]) => {
+          // 프리로드 응답 도착 전에 SSE 로 쌓인 포인트와 시각 기준으로 합친다 (중복 시각은 SSE 값 우선)
+          const byTime = new Map<number, LivePoint>()
+          points.forEach((point) => byTime.set(point.t, point))
+          ;(previous[Number(sensorId)] ?? []).forEach((point) => byTime.set(point.t, point))
+          next[Number(sensorId)] = [...byTime.values()]
+            .filter((point) => point.t >= cutoff)
+            .sort((a, b) => a.t - b.t)
+            .slice(-LIVE_MAX_POINTS)
+        })
+        return next
+      })
+    })
+
+    return () => controller.abort()
+  }, [equipmentId, sensorTypeKey])
+
   const handleSensor = useCallback(
     (payload: SensorEventPayload) => {
       applySensorEvent(payload)
@@ -101,53 +138,39 @@ export function SensorTabPanel({ equipmentId, sensors }: SensorTabPanelProps) {
     [applySensorEvent, appendPoint],
   )
 
-  const stream = useSensorStream(equipmentId, {
-    onSensor: handleSensor,
-    // 폴백 폴링: 최신값을 다시 읽어 수치를 갱신하고, 차트에도 3초 간격 포인트로 이어붙인다.
-    // (SSE 가 막혀도 실시간 차트가 빈 화면으로 남지 않게 한다)
-    onPoll: async (signal) => {
-      const next = await reload(signal)
-      ;(next[equipmentId] ?? []).forEach((sensor) => {
-        if (sensor.value === null || sensor.value === undefined || !sensor.measuredAt) return
-        appendPoint({
-          sensorId: sensor.sensorId,
-          equipmentId,
-          type: sensor.sensorType,
-          value: sensor.value,
-          measuredAt: sensor.measuredAt,
-          level: sensor.level ?? 'NORMAL',
+  // 실시간 센서 이벤트 구독 (연결은 페이지가 소유)
+  const { subscribeSensor, subscribePoll } = feed
+  useEffect(() => subscribeSensor(handleSensor), [subscribeSensor, handleSensor])
+
+  // 폴백 폴링: 최신값을 다시 읽어 수치를 갱신하고, 차트에도 3초 간격 포인트로 이어붙인다.
+  // (SSE 가 막혀도 실시간 차트가 빈 화면으로 남지 않게 한다)
+  useEffect(
+    () =>
+      subscribePoll(async (signal) => {
+        const next = await reload(signal)
+        ;(next[equipmentId] ?? []).forEach((sensor) => {
+          if (sensor.value === null || sensor.value === undefined || !sensor.measuredAt) return
+          appendPoint({
+            sensorId: sensor.sensorId,
+            equipmentId,
+            type: sensor.sensorType,
+            value: sensor.value,
+            measuredAt: sensor.measuredAt,
+            level: sensor.level ?? 'NORMAL',
+          })
         })
-      })
-    },
-  })
+      }),
+    [subscribePoll, reload, equipmentId, appendPoint],
+  )
 
-  // 임계치·단위는 상세 응답을, 현재값은 latest/SSE 를 우선한다.
-  const mergedSensors = useMemo((): SensorLatest[] => {
-    const fromDetail = (sensors ?? []).map((sensor) => toSensorLatest(sensor, equipmentId))
-    const fromLatest = sensorsByEquipment[equipmentId] ?? []
+  const stream = feed.state
 
-    if (fromDetail.length === 0) return fromLatest
-    const latestById = new Map(fromLatest.map((sensor) => [sensor.sensorId, sensor]))
-
-    return fromDetail
-      .map((detail) => {
-        const latest = latestById.get(detail.sensorId)
-        if (!latest) return detail
-        return {
-          ...detail,
-          value: latest.value ?? detail.value,
-          measuredAt: latest.measuredAt ?? detail.measuredAt,
-          level: latest.level,
-          // 임계치는 latest 가 단일 출처 — null 은 '미설정'이라는 값이므로 ?? 로 상세의 옛 값으로 되돌리지 않는다.
-          // (임계치 수정 직후 경계를 비웠을 때 이전 값이 되살아나는 것을 막는다. 키 자체가 없을 때만 상세 값 사용)
-          warnLow: latest.warnLow !== undefined ? latest.warnLow : detail.warnLow,
-          warnHigh: latest.warnHigh !== undefined ? latest.warnHigh : detail.warnHigh,
-          critLow: latest.critLow !== undefined ? latest.critLow : detail.critLow,
-          critHigh: latest.critHigh !== undefined ? latest.critHigh : detail.critHigh,
-        }
-      })
-      .sort((a, b) => compareSensorType(a.sensorType, b.sensorType))
-  }, [sensors, sensorsByEquipment, equipmentId])
+  // 임계치·단위·현재값 모두 GET .../sensor-data/latest + SSE 가 단일 출처다 (센서 종류 순서 고정)
+  const mergedSensors = useMemo(
+    (): SensorLatest[] =>
+      [...(sensorsByEquipment[equipmentId] ?? [])].sort((a, b) => compareSensorType(a.sensorType, b.sensorType)),
+    [sensorsByEquipment, equipmentId],
+  )
 
   if (loading && mergedSensors.length === 0) {
     return <LoadingBlock label="센서 정보를 불러오는 중…" />

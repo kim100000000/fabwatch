@@ -24,7 +24,10 @@ public class SensorScheduler {
     private final SensorIngestionService ingestionService;
     private final SensorAggregationService aggregationService;
 
-    /** 센서 데이터 생성·수집 — 2초 (docs/03 F-4.2) */
+    /**
+     * 센서 데이터 생성·수집 — 2초 (docs/03 F-4.2).
+     * 원본 저장은 짧은 트랜잭션으로 먼저 커밋하고, SSE·알람 판정은 커밋 후 센서별로 격리해 처리한다 (SensorIngestionService).
+     */
     @Scheduled(fixedRate = 2000)
     public void ingest() {
         try {
@@ -49,7 +52,7 @@ public class SensorScheduler {
     }
 
     /** 원본 7일 초과분 삭제 — 매일 새벽 03:30 UTC (docs/05 §3, docs/13 §5) */
-    @Scheduled(cron = "0 30 3 * * *")
+    @Scheduled(cron = "0 30 3 * * *", zone = "UTC")
     public void purgeRaw() {
         try {
             aggregationService.purgeRawBefore(Instant.now());

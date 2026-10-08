@@ -1,5 +1,6 @@
 package com.fabwatch.sensor.controller;
 
+import com.fabwatch.common.security.SecurityUtils;
 import com.fabwatch.sensor.service.SensorStreamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -24,6 +25,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  *   포함하므로 token이 파일 로그로 샌다. 활성화 시 pattern에서 쿼리스트링을 제외할 것.
  *
  * equipmentId 생략 → 전체 라인 구독(메인 대시보드용).
+ *
+ * 연결 상한: 사용자당 5개(초과 시 가장 오래된 연결을 닫고 새 연결 허용), 전체 200개(초과 시 429 RATE_LIMITED, JSON 에러 본문).
  */
 @RestController
 @RequestMapping("/api/v1/stream")
@@ -40,6 +43,6 @@ public class SensorStreamController {
     public ResponseEntity<SseEmitter> streamSensors(@RequestParam(required = false) Long equipmentId) {
         return ResponseEntity.ok()
                 .contentType(new MediaType(MediaType.TEXT_EVENT_STREAM, java.nio.charset.StandardCharsets.UTF_8))
-                .body(sensorStreamService.subscribe(equipmentId));
+                .body(sensorStreamService.subscribe(equipmentId, SecurityUtils.currentUserId()));
     }
 }

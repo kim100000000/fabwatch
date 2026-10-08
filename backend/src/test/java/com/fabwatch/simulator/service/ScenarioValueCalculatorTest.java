@@ -152,10 +152,14 @@ class ScenarioValueCalculatorTest {
     }
 
     @Test
-    @DisplayName("SPIKE 확률은 0~1로 클램프된다")
-    void 스파이크_확률_클램프() {
-        assertThat(ScenarioParams.normalizeSpike(Map.of("probability", 5)).get("probability")).isEqualTo(1.0);
-        assertThat(ScenarioParams.normalizeSpike(Map.of("probability", -1)).get("probability")).isEqualTo(0.0);
+    @DisplayName("SPIKE 확률은 0~1 경계까지 허용하고, 범위 밖은 보정하지 않고 400으로 거부한다 (주입 검증)")
+    void 스파이크_확률_범위() {
+        assertThat(ScenarioParams.normalizeSpike(Map.of("probability", 1)).get("probability")).isEqualTo(1.0);
+        assertThat(ScenarioParams.normalizeSpike(Map.of("probability", 0)).get("probability")).isEqualTo(0.0);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> ScenarioParams.normalizeSpike(Map.of("probability", 5)))
+                .isInstanceOf(com.fabwatch.common.exception.BusinessException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> ScenarioParams.normalizeSpike(Map.of("probability", -1)))
+                .isInstanceOf(com.fabwatch.common.exception.BusinessException.class);
     }
 
     @Test

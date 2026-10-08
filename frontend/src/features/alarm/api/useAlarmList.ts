@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { useApiQuery } from '@/shared/hooks/useApiQuery'
 import type { ApiError, PageResponse } from '@/shared/api'
-import { fetchAlarms } from './alarmApi'
+import { fetchAlarms, fetchUnresolvedAlarms } from './alarmApi'
 import type { Alarm, AlarmListFilter } from '../types'
 
 export interface AlarmListResult {
@@ -26,6 +26,9 @@ export function useAlarmList(filter: AlarmListFilter = {}, reloadKey = 0): Alarm
   const fetcher = useCallback(
     (signal: AbortSignal): Promise<PageResponse<Alarm>> => {
       void reloadKey
+      if (status === 'UNRESOLVED') {
+        return fetchUnresolvedAlarms({ equipmentId, severity, from, to, page, size }, signal)
+      }
       return fetchAlarms({ equipmentId, status, severity, from, to, page, size }, signal)
     },
     [equipmentId, status, severity, from, to, page, size, reloadKey],

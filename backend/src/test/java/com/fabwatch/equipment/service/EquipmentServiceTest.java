@@ -87,6 +87,8 @@ class EquipmentServiceTest {
         process.addEquipment(equipment);
 
         given(equipmentRepository.findById(EQUIPMENT_ID)).willReturn(Optional.of(equipment));
+        // 상태 전환(changeStatus/autoDown)은 행 락 조회를 쓴다 (안정성 감사 M-1)
+        given(equipmentRepository.findByIdForUpdate(EQUIPMENT_ID)).willReturn(Optional.of(equipment));
         given(userQueryService.findNameById(any())).willReturn(Optional.empty());
     }
 
@@ -248,6 +250,59 @@ class EquipmentServiceTest {
         ArgumentCaptor<EquipmentStatusLog> captor = ArgumentCaptor.forClass(EquipmentStatusLog.class);
         verify(statusLogRepository, times(1)).save(captor.capture());
         assertThat(captor.getValue().getChangedBy()).isNull();
+    }
+
+    @Test
+    @DisplayName("★ 락: changeStatus/autoDown은 findByIdForUpdate(PESSIMISTIC_WRITE)로만 설비를 읽는다 — 일반 findById 금지 (M-1)")
+    void 상태전환은_락_조회만_사용() {
+        equipmentService.changeStatus(EQUIPMENT_ID,
+                new EquipmentStatusChangeRequest(EquipmentStatus.IDLE, null), ACTOR_ID, "ENGINEER");
+        equipmentService.autoDown(EQUIPMENT_ID, "CRITICAL 알람", java.time.Instant.now());
+
+        verify(equipmentRepository, times(2)).findByIdForUpdate(EQUIPMENT_ID);
+        verify(equipmentRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("★ 락: 락 획득 후의 최신 상태로 판정한다 — 이미 DOWN이 된 설비는 자동 DOWN이 조용히 생략되고 로그가 중복되지 않는다 (M-1)")
+    void 락_이후_최신_상태로_판정() {
+        // 틱이 RUN으로 알고 있었어도 락을 잡고 읽은 시점에 사용자가 이미 DOWN으로 바꿨다면
+        ReflectionTestUtils.setField(equipment, "status", EquipmentStatus.DOWN);
+
+        boolean changed = equipmentService.autoDown(EQUIPMENT_ID, "CRITICAL 알람", java.time.Instant.now());
+
+        assertThat(changed).isFalse();
+        verify(statusLogRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any(EquipmentStatusChangedEvent.class));
+    }
+
+    @Test
+    @DisplayName("★ 자동 DOWN 로그의 changedAt은 알람 발생 시각이 아니라 전환 시각(now)이고, 알람 발생 시각은 사유에 남는다 (M-1)")
+    void 자동DOWN_changedAt은_현재시각() {
+        java.time.Instant occurredAt = java.time.Instant.parse("2026-01-01T00:00:00Z"); // 먼 과거 알람
+        java.time.Instant before = java.time.Instant.now();
+
+        equipmentService.autoDown(EQUIPMENT_ID, "CRITICAL 알람 자동 DOWN — 진동 임계 초과", occurredAt);
+
+        ArgumentCaptor<EquipmentStatusLog> captor = ArgumentCaptor.forClass(EquipmentStatusLog.class);
+        verify(statusLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getChangedAt()).isAfterOrEqualTo(before);
+        assertThat(captor.getValue().getReason())
+                .startsWith("CRITICAL 알람 자동 DOWN — 진동 임계 초과")
+                .endsWith("[알람 발생 2026-01-01T00:00:00Z]");
+    }
+
+    @Test
+    @DisplayName("락 조회에서도 없는 설비는 NOT_FOUND")
+    void 없는_설비_상태전환() {
+        given(equipmentRepository.findByIdForUpdate(999L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> equipmentService.changeStatus(999L,
+                new EquipmentStatusChangeRequest(EquipmentStatus.DOWN, "x"), ACTOR_ID, "ADMIN"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.NOT_FOUND);
+        assertThat(equipmentService.autoDown(999L, "x", java.time.Instant.now())).isFalse();
     }
 
     @Test

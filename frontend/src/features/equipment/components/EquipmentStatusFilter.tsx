@@ -15,6 +15,7 @@ export function EquipmentStatusFilter({ value, onChange }: EquipmentStatusFilter
       <button
         type="button"
         className={value === null ? 'filter-chip active' : 'filter-chip'}
+        aria-pressed={value === null}
         onClick={() => onChange(null)}
       >
         전체
@@ -25,6 +26,7 @@ export function EquipmentStatusFilter({ value, onChange }: EquipmentStatusFilter
           type="button"
           data-status={status}
           className={value === status ? 'filter-chip active' : 'filter-chip'}
+          aria-pressed={value === status}
           onClick={() => onChange(value === status ? null : status)}
         >
           {statusLabel(status)}

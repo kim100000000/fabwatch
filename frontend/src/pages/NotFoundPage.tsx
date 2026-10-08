@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom'
+import { usePageTitle } from '@/shared/hooks/usePageTitle'
 import { EmptyState } from '@/shared/ui'
 
 /** 정의되지 않은 경로 */
 export function NotFoundPage() {
+  usePageTitle('페이지를 찾을 수 없음')
   return (
     <div className="page">
       <EmptyState

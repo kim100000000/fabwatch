@@ -117,6 +117,22 @@ export function formatDuration(minutes: number | null | undefined): string {
   return rest === 0 ? `${hours}시간` : `${hours}시간 ${rest}분`
 }
 
+/**
+ * 상대 시각 표기 — '방금' / 'N분 전' / 'N시간 전' / 'N일 전'.
+ * now 를 인자로 받아 호출부가 주기적 갱신(useNow)과 테스트를 제어할 수 있게 한다. 미래 시각은 '방금'.
+ */
+export function formatRelative(value: string | Date | null | undefined, now: number = Date.now()): string {
+  const date = toDate(value)
+  if (!date) return '-'
+  const diffMs = Math.max(0, now - date.getTime())
+  const minutes = Math.floor(diffMs / 60_000)
+  if (minutes < 1) return '방금'
+  if (minutes < 60) return `${minutes}분 전`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}시간 전`
+  return `${Math.floor(hours / 24)}일 전`
+}
+
 function toDate(value: string | Date | null | undefined): Date | null {
   if (!value) return null
   const date = value instanceof Date ? value : new Date(value)

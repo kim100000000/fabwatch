@@ -13,13 +13,14 @@ export async function login(payload: LoginRequest): Promise<LoginResponse> {
 }
 
 /**
- * POST /auth/logout — 서버의 Refresh 를 무효화한다.
- * 요청 바디는 없다. 백엔드는 Authorization 헤더의 사용자로 대상 Refresh 를 찾는다.
- * 서버 호출이 실패해도 로컬 토큰은 반드시 정리한다.
+ * POST /auth/logout — 현재 기기의 Refresh 세션만 서버에서 무효화한다 (docs/06 §1).
+ * 본문의 refreshToken 으로 대상 세션을 지정한다(생략하면 서버가 본인의 모든 세션을 폐기하므로
+ * 저장된 값이 있으면 항상 보낸다). 서버 호출이 실패해도 로컬 토큰은 반드시 정리한다.
  */
 export async function logout(): Promise<void> {
+  const refreshToken = tokenStorage.getRefreshToken()
   try {
-    await apiClient.post('/auth/logout')
+    await apiClient.post('/auth/logout', refreshToken ? { refreshToken } : undefined)
   } finally {
     tokenStorage.clear()
   }

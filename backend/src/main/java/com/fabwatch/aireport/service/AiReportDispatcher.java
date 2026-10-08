@@ -25,6 +25,9 @@ import java.util.concurrent.ThreadPoolExecutor;
 @Slf4j
 public class AiReportDispatcher {
 
+    /** 종료 시 진행 중 작업을 기다리는 최대 시간(초) — 테스트에서 줄여 쓴다 */
+    private long shutdownWaitSeconds = 10;
+
     private final Executor executor;
     private final ThreadPoolTaskExecutor owned;
 
@@ -36,8 +39,8 @@ public class AiReportDispatcher {
         pool.setQueueCapacity(props.queueCapacity());
         pool.setThreadNamePrefix("ai-report-");
         pool.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
-        pool.setWaitForTasksToCompleteOnShutdown(true);
-        pool.setAwaitTerminationSeconds(10);
+        // 종료 대기는 아래 @PreDestroy shutdown()이 직접 한다(shutdown → 대기 → 시간 초과 시 shutdownNow)
+        pool.setWaitForTasksToCompleteOnShutdown(false);
         pool.initialize();
         this.executor = pool;
         this.owned = pool;
@@ -74,10 +77,25 @@ public class AiReportDispatcher {
         }
     }
 
+    /**
+     * 종료 시 진행 중인 생성은 마무리할 시간을 주고(최대 10초), 넘기면 강제 중단한다 (L-13).
+     * 강제 중단된 PENDING/GENERATING 건은 다음 기동의 AiReportRecoveryService가 FAILED로 정리한다.
+     */
     @PreDestroy
     void shutdown() {
-        if (owned != null) {
-            owned.shutdown();
+        if (owned == null) {
+            return;
+        }
+        java.util.concurrent.ThreadPoolExecutor pool = owned.getThreadPoolExecutor();
+        pool.shutdown();
+        try {
+            if (!pool.awaitTermination(shutdownWaitSeconds, java.util.concurrent.TimeUnit.SECONDS)) {
+                int dropped = pool.shutdownNow().size();
+                log.warn("AI 리포트 생성 풀 강제 종료: 대기 중이던 {}건 폐기(복구 서비스가 FAILED로 정리)", dropped);
+            }
+        } catch (InterruptedException e) {
+            pool.shutdownNow();
+            Thread.currentThread().interrupt();
         }
     }
 }

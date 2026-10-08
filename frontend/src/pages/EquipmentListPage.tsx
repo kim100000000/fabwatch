@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/app/providers/useAuth'
 import {
@@ -8,7 +8,9 @@ import {
   EquipmentTable,
   useEquipmentList,
 } from '@/features/equipment'
-import type { EquipmentDetail, EquipmentStatus } from '@/features/equipment'
+import type { EquipmentDetail, EquipmentStatus, OpenAlarmCounts } from '@/features/equipment'
+import { useOpenAlarmSummary } from '@/features/alarm'
+import { usePageTitle } from '@/shared/hooks/usePageTitle'
 import { statusLabel } from '@/shared/lib/equipmentStatus'
 import { EmptyState, ErrorState, LoadingBlock } from '@/shared/ui'
 
@@ -33,6 +35,21 @@ export function EquipmentListPage() {
     status: status ?? undefined,
     size: 50,
   })
+
+  usePageTitle('설비 목록')
+
+  // 설비 목록 응답에는 미해결 알람 수가 없다 — 알람 목록을 집계해 합친다 (로딩/실패는 0 으로 폴백하지 않는다)
+  const alarmSummary = useOpenAlarmSummary()
+  const alarmCounts = useMemo((): OpenAlarmCounts => {
+    if (alarmSummary.error) return { state: 'error' }
+    if (!alarmSummary.summary) return { state: 'loading' }
+    return {
+      state: 'ready',
+      byEquipment: Object.fromEntries(
+        Object.entries(alarmSummary.summary.byEquipment).map(([id, value]) => [id, value.count]),
+      ),
+    }
+  }, [alarmSummary.error, alarmSummary.summary])
 
   const goDetail = (equipmentId: number) => navigate(`/equipment/${equipmentId}`)
 
@@ -84,6 +101,7 @@ export function EquipmentListPage() {
           <button
             type="button"
             className={view === 'table' ? 'active' : undefined}
+            aria-pressed={view === 'table'}
             onClick={() => setView('table')}
           >
             테이블
@@ -91,6 +109,7 @@ export function EquipmentListPage() {
           <button
             type="button"
             className={view === 'card' ? 'active' : undefined}
+            aria-pressed={view === 'card'}
             onClick={() => setView('card')}
           >
             카드
@@ -109,15 +128,22 @@ export function EquipmentListPage() {
         />
       )}
 
+      {!loading && !error && totalElements > equipments.length && (
+        <p className="field-hint" role="status">
+          총 {totalElements}대 중 {equipments.length}대만 표시됩니다. 상태 필터로 범위를 좁혀 주세요.
+        </p>
+      )}
+
       {!loading && !error && equipments.length > 0 && (
         view === 'table' ? (
           <EquipmentTable
             equipments={equipments}
+            alarmCounts={alarmCounts}
             onSelect={goDetail}
             onEdit={canManage ? (equipmentId) => setFormTarget(equipmentId) : undefined}
           />
         ) : (
-          <EquipmentCardGrid equipments={equipments} onSelect={goDetail} />
+          <EquipmentCardGrid equipments={equipments} alarmCounts={alarmCounts} onSelect={goDetail} />
         )
       )}
 

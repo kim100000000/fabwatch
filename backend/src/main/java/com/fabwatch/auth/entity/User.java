@@ -21,8 +21,9 @@ import java.time.Instant;
  * // TENANT: 멀티테넌트 전환 시 tenant_id 추가 지점
  *
  * docs/05 대비 추가 컬럼 (docs/11 §2 요구를 저장할 자리가 docs/05에 없어 추가):
- * - refresh_token_expires_at : Refresh 14일 만료 판정
  * - failed_login_count / locked_until : 로그인 5회 실패 → 15분 잠금
+ * Refresh 토큰은 users 컬럼이 아니라 별도 refresh_tokens 테이블(RefreshToken)에 해시로 저장한다(다중 세션).
+ * 기존 DB의 users.refresh_token* 컬럼은 더 이상 읽고 쓰지 않는다(docs/13 마이그레이션 메모).
  */
 @Entity
 @Table(name = "users")
@@ -52,13 +53,6 @@ public class User extends SoftDeletableEntity {
 
     @Column(name = "enabled", nullable = false)
     private boolean enabled = true;
-
-    /** 불투명 Refresh 토큰. 로그아웃 시 NULL (docs/05 users.refresh_token) */
-    @Column(name = "refresh_token", length = 512)
-    private String refreshToken;
-
-    @Column(name = "refresh_token_expires_at")
-    private Instant refreshTokenExpiresAt;
 
     @Column(name = "failed_login_count", nullable = false)
     private int failedLoginCount = 0;
@@ -96,20 +90,5 @@ public class User extends SoftDeletableEntity {
     public void resetLoginFailure() {
         this.failedLoginCount = 0;
         this.lockedUntil = null;
-    }
-
-    public void updateRefreshToken(String refreshToken, Instant expiresAt) {
-        this.refreshToken = refreshToken;
-        this.refreshTokenExpiresAt = expiresAt;
-    }
-
-    /** 로그아웃 / 재사용 감지 시 전체 세션 무효화 (docs/11 §2) */
-    public void clearRefreshToken() {
-        this.refreshToken = null;
-        this.refreshTokenExpiresAt = null;
-    }
-
-    public boolean isRefreshTokenExpired(Instant now) {
-        return refreshTokenExpiresAt == null || !refreshTokenExpiresAt.isAfter(now);
     }
 }

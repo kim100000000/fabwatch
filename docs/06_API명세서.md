@@ -2,7 +2,7 @@
 
 > 버전 v1.0 / 2026-07-06
 > Base: `/api/v1` · 인증: `Authorization: Bearer {accessToken}` (auth 제외 전부)
-> 에러 공통: `{ "code": "ERROR_CODE", "message": "...", "timestamp": "..." }` — 클라이언트 실수는 500이 아니라 해당 4xx로 내려간다: 400 `VALIDATION_ERROR`(형식·필수값·파싱 실패), 401 `UNAUTHORIZED`, 403 `FORBIDDEN`, 404 `NOT_FOUND`, 405 `METHOD_NOT_ALLOWED`, 406 `NOT_ACCEPTABLE`, 415 `UNSUPPORTED_MEDIA_TYPE`. (참고: 입력 검증이 권한 검사보다 먼저 평가되어, 권한 없는 사용자가 잘못된 본문을 보내면 403이 아니라 400이 나올 수 있다 — 본문에는 공개된 DTO 제약 메시지만 담긴다.)
+> 에러 공통: `{ "code": "ERROR_CODE", "message": "...", "timestamp": "..." }` — 클라이언트 실수는 500이 아니라 해당 4xx로 내려간다: 400 `VALIDATION_ERROR`(형식·필수값·파싱 실패), 401 `UNAUTHORIZED`, 403 `FORBIDDEN`, 404 `NOT_FOUND`, 405 `METHOD_NOT_ALLOWED`, 406 `NOT_ACCEPTABLE`, 409 `CONFLICT`(DB 무결성 충돌 — SQL·제약명 비노출), 413 `PAYLOAD_TOO_LARGE`(본문 기본 1MB 초과), 415 `UNSUPPORTED_MEDIA_TYPE`, 429 `RATE_LIMITED`(로그인/리프레시 IP 레이트 리밋 또는 SSE 연결 한도 — 레이트 리밋은 `Retry-After` 헤더 포함). 잘못된 `sort` 속성은 500이 아니라 400 `VALIDATION_ERROR`이며, 정렬이 서버 고정인 목록은 `sort`를 무시한다. (참고: 입력 검증이 권한 검사보다 먼저 평가되어, 권한 없는 사용자가 잘못된 본문을 보내면 403이 아니라 400이 나올 수 있다 — 본문에는 공개된 DTO 제약 메시지만 담긴다.)
 > 목록 공통: `?page=0&size=20&sort=...` → `{ content: [], totalElements, totalPages, number }`
 
 ## 1. 인증 /auth
@@ -10,10 +10,10 @@
 | 메서드 | 경로 | 설명 | 권한 |
 |---|---|---|---|
 | POST | /auth/login | `{email, password}` → `{accessToken, refreshToken, user:{id,name,role}}` | 공개 |
-| POST | /auth/refresh | `{refreshToken}` → 새 토큰 쌍 | 공개 |
-| POST | /auth/logout | Refresh 무효화 | 로그인 |
+| POST | /auth/refresh | `{refreshToken}` → 새 토큰 쌍. 토큰은 **회전**되므로 응답의 새 `refreshToken`으로 교체해야 한다. 알 수 없는/만료/폐기 토큰은 401 `INVALID_TOKEN`(서버의 어떤 세션도 지우지 않음), 비활성 사용자 403 `USER_DISABLED`. 회전 직후 10초간은 직전 토큰도 허용(병렬 갱신 대비). 사용자당 최대 5세션 | 공개 |
+| POST | /auth/logout | 본문 `{refreshToken}`(선택)의 **그 세션만** 무효화(다른 기기 유지). 본문 생략 시 본인의 모든 세션 무효화. 204 | 로그인 |
 | GET | /users/lookup | 활성 사용자 경량 조회(점검 이력 작업자 필터용). **단순 배열**(PageResponse 아님), 이름순 → `[{id,name,role}]`. 이메일·비밀번호·토큰·잠금 상태는 응답에 없음. 비활성(`enabled=false`)·soft delete 사용자 제외. 현재 규모에선 전체 반환(`// SCALE:`). 토큰 없음 401 | 로그인(전체 역할) |
-| 에러 | | 401 `LOGIN_FAILED` / 429 `ACCOUNT_LOCKED` / 401 `TOKEN_EXPIRED` / 403 `USER_DISABLED` | |
+| 에러 | | 401 `LOGIN_FAILED` / 429 `ACCOUNT_LOCKED` / 401 `TOKEN_EXPIRED` / 401 `INVALID_TOKEN` / 403 `USER_DISABLED` / 429 `RATE_LIMITED`(IP당 분당 30회, `Retry-After`) | |
 
 ## 2. 설비 /lines, /equipments
 
@@ -37,17 +37,17 @@
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | GET | /equipments/{id}/sensor-data/latest | 센서별 최신값 1건씩(카드용). `PageResponse` 래핑, 항목에 `warnLow/warnHigh/critLow/critHigh` 4값 동봉(기준선용) |
-| GET | /equipments/{id}/sensor-data | `?sensorType=&from=&to=` — 1시간 이내: 원본, 초과: 1분 집계 자동 선택. **`PageResponse`가 아니라 단일 객체**: `{equipmentId, granularity:"RAW"|"1M", from, to, series:[{sensorId, sensorType, unit, warnLow~critHigh, points:[{at, value, minValue, maxValue, sampleCount}]}]}`. point shape은 RAW/1M 공통(1M일 때 `at=bucket_at, value=avg_v`, min/max/sampleCount 채워짐) |
+| GET | /equipments/{id}/sensor-data | `?sensorType=&from=&to=` — 1시간 이내: 원본, 초과: 1분 집계 자동 선택. **`PageResponse`가 아니라 단일 객체**: `{equipmentId, granularity:"RAW"|"1M", from, to, series:[{sensorId, sensorType, unit, warnLow~critHigh, points:[{at, value, minValue, maxValue, sampleCount}]}]}`. point shape은 RAW/1M 공통(1M일 때 `at=bucket_at, value=avg_v`, min/max/sampleCount 채워짐). **안전 상한 (안정성 감사 M-7)**: ① 기간은 **최대 31일**(`fabwatch.sensor.query.max-range-days`) — 초과·`from>=to`·현재보다 5분 넘게 미래인 `to`는 **400 `VALIDATION_ERROR`**(예: "조회 기간은 최대 31일까지입니다. 기간을 줄여 주세요."). ② 센서당 응답 포인트 상한 **20,000**(`max-points-per-sensor`) — 1분 집계로 넘는 구간(기본값 기준 약 13.8일 초과)은 400이 아니라 **서버가 버킷을 키워 다운샘플링**하며 `granularity`가 `"5M"`(5분) → `"1H"`(1시간)로 바뀐다(point shape 동일, `value`=표본 수 가중 평균, `minValue/maxValue`=버킷 극값, `sampleCount`=합계, `at`=UTC 정렬 버킷 시작). 그래도 넘으면 400. 따라서 `granularity`는 `"RAW"\|"1M"\|"5M"\|"1H"` 4종이다. 1시간 이내 RAW, 1시간 초과~약 13.8일은 기존과 동일하게 `"1M"`. |
 | GET | /equipments/{id}/sensors | 설비 센서 목록(임계치 편집 화면 진입용). *(구현 시 추가, 최초 설계엔 없었음)* |
 | PUT | /equipments/{id}/sensors/{sensorId}/thresholds | 임계치 수정 `{warnLow,warnHigh,critLow,critHigh,reason}`(reason 필수·trim·300자). 4값은 각각 null 가능(해당 방향 미사용)하나 **전부 null이거나 키를 빠뜨리면 400 `INVALID_THRESHOLD_RANGE`**(센서 감시가 꺼지므로). 순서 위반도 `INVALID_THRESHOLD_RANGE`, 소수 3자리 이상·정수 8자리 초과는 400 `VALIDATION_ERROR`(DB decimal(10,2)). ADMIN 전용(ENGINEER 403), 변경 이력은 누가·언제·왜·이전→이후로 보존 |
 | GET | /equipments/{id}/sensors/{sensorId}/thresholds/logs | 임계치 변경 이력 `{oldWarn*,oldCrit*,newWarn*,newCrit*,reason,changedBy,changedByName,changedAt}`. *(구현 시 추가)* |
-| **SSE** | **GET /stream/sensors?token=&equipmentId=** | `text/event-stream`. 인증은 쿼리파라미터 `token`(SSE 한정, docs/11 §4). event: `sensor` `{sensorId, equipmentId, type, unit, value, measuredAt, level: NORMAL|WARNING|CRITICAL}`(`equipmentId`·`unit`은 카드 매칭/차트축용으로 추가) / event: `alarm` — REST `AlarmResponse`와 다른 shape, **식별자 키가 `id`가 아니라 `alarmId`**, ack/resolve 필드 없음 / event: `status` `{equipmentId, equipmentCode, fromStatus, toStatus, reason, changedBy, changedAt}`. equipmentId 생략 시 전체 라인 구독(메인 대시보드용). 30초 heartbeat(`:heartbeat` 주석) |
+| **SSE** | **GET /stream/sensors?token=&equipmentId=** | `text/event-stream`. 인증은 쿼리파라미터 `token`(SSE 한정, docs/11 §4). event: `sensor` `{sensorId, equipmentId, type, unit, value, measuredAt, level: NORMAL|WARNING|CRITICAL}`(`equipmentId`·`unit`은 카드 매칭/차트축용으로 추가) / event: `alarm` — REST `AlarmResponse`와 다른 shape, **식별자 키가 `id`가 아니라 `alarmId`**, ack/resolve 필드 없음 / event: `status` `{equipmentId, equipmentCode, fromStatus, toStatus, reason, changedBy, changedAt}`. equipmentId 생략 시 전체 라인 구독(메인 대시보드용). 30초 heartbeat(`:heartbeat` 주석). **연결 상한**: 사용자당 5개(초과 시 가장 오래된 연결을 서버가 닫고 새 연결 허용), 전체 200개 초과 시 새 연결은 429 `RATE_LIMITED`(JSON 본문). **이벤트 타이밍 (안정성 감사 H-3)**: `sensor`는 해당 틱의 센서 원본이 DB에 커밋된 **뒤에** 나가고, `alarm`·`status`는 알람/상태 변경 트랜잭션이 **커밋된 뒤에만** 나간다(롤백되면 나가지 않음 — 유령 토스트 없음, 수신 즉시 재조회해도 데이터가 보임). 이벤트 종류·payload 변경 없음. 전송은 구독자별 큐+전용 스레드로 비동기화돼 있고, 느린 구독자(대기 큐 100건 초과 또는 한 번의 전송이 5초 넘게 막힘)는 서버가 연결을 끊는다 — 프론트는 기존 재연결/폴링 폴백으로 복구 |
 
 > 임계치 API는 설비가 아니라 센서 소유이므로 실제 구현은 `sensor` 도메인 패키지에 위치(equipment가 Sensor 엔티티를 직접 참조하지 않기 위함). 경로·권한은 위 표와 동일.
 
 ## 4. 점검 이력 /inspections
 
-> 구현 완료(3주차). 시각은 전부 ISO-8601 UTC 문자열. 목록은 `{content,totalElements,totalPages,number}`, 정렬은 `startedAt desc` 고정(sort 파라미터 무시), `size` 기본 20.
+> 구현 완료(3주차). `content`·`actionTaken`은 각 20,000자 이하(초과 400 `VALIDATION_ERROR`), `checkResults`는 200개 이하. 시각은 전부 ISO-8601 UTC 문자열. 목록은 `{content,totalElements,totalPages,number}`, 정렬은 `startedAt desc` 고정(sort 파라미터 무시), `size` 기본 20.
 
 | 메서드 | 경로 | 설명 | 권한 |
 |---|---|---|---|
@@ -93,6 +93,7 @@
 - `checkResults`는 **PM에서만** 허용(BM에 넣으면 400), 항목 중복 불가, 해당 설비의 템플릿 항목이어야 함(아니면 400). NG가 1건이라도 있으면 `hasNg=true`.
 - `alarmId`는 **BM에서만** 허용(PM이면 400). 없는 알람 404 `NOT_FOUND`, **다른 설비 알람이면 400 `VALIDATION_ERROR`**. 연계 알람 처리: OPEN이면 작성자 명의로 자동 ACK 후 RESOLVED, ACK면 RESOLVED, 이미 RESOLVED면 그대로(에러 없음). `resolveNote`는 `BM 점검 이력 #{id}로 조치 완료`. 점검 저장과 알람 해제는 한 트랜잭션.
 - **설비 상태는 자동 변경하지 않는다.** BM 등록 후 DOWN→IDLE은 프론트가 확인 다이얼로그 후 `PATCH /equipments/{id}/status` 호출.
+- PM 이력 **수정**(`PUT`)으로 `endedAt`이 바뀌면(그 이력이 마지막 수행이었거나 새 마지막 수행이 되는 경우만) 스케줄을 재계산한다: 새 `last_done_at`=해당 설비 PM 이력 중 가장 늦은 `endedAt`(앞당겨도 직전 PM 시각까지만 되돌림), `next_due_at` 재계산, 지연 플래그 초기화, 수행 시각이 늦춰졌으면 미해결 `PM_OVERDUE` 알람 자동 해소. 상세는 docs/03 F-3.3.
 - PM 등록 시 해당 설비 PM 스케줄의 `last_done_at`=종료 시각, `next_due_at` 재계산, `overdue_alarm_sent=false` 초기화. (기존 last_done보다 이전 시각의 소급 등록은 스케줄을 되돌리지 않음. 스케줄 없는 설비는 건너뜀.)
 - PM 등록으로 스케줄이 실제 갱신된 경우, 해당 설비의 미해결(OPEN/ACK) `PM_OVERDUE` 알람은 같은 트랜잭션에서 작성자 명의로 자동 ACK→RESOLVED 된다(`resolveNote`=`PM 점검 이력 #{id}로 수행 완료`, 알람이 없거나 이미 RESOLVED면 아무 일도 없음, 소급 등록·스케줄 없는 설비는 해소하지 않음). BM·타 설비 알람은 영향 없음.
 - PUT: 수정 가능 필드는 `shift?, startedAt, endedAt, content, actionTaken, cause4m, causeDetail, checkResults?`. 설비·유형·작성자·알람 연계는 불변. `checkResults`가 null이면 기존 결과 유지, 배열이면(빈 배열 포함) 기존 결과를 soft delete 후 교체하고 hasNg 재계산. 판정 순서: 404 → 403 → 400.
@@ -184,7 +185,10 @@ PmScheduleResponse = {
 | DELETE | /simulator/scenarios/{id} | 해제 (정상 복귀) | ENGINEER+ |
 | POST | /simulator/demo | 데모 자동 시나리오 시작 (FR-4.5). 진동 센서에 DRIFT를 주입하며 durationMin은 설정 `fabwatch.simulator.demo-duration-min`(기본 **2분**, 환경변수 `SIMULATOR_DEMO_DURATION_MIN`) — 약 2~3분 안에 정상 → 드리프트 → WARNING → CRITICAL → 자동 DOWN. 이미 주입돼 있으면 그대로 두고 활성 목록 반환 | ENGINEER+ |
 
-param 기본값: DRIFT `{durationMin: 10}` (durationMin분에 crit 도달하는 기울기 자동 계산, 응답 param에 `slopePerSec`·`maxElapsedSec`·`targetValue` 포함. **상한 도달 후엔 목표값에서 고정**되어 해제하지 않아도 무한 상승하지 않음) / SPIKE `{probability: 0.1, multiplier: 1.8}` / STEP `{offsetRatio: 0.15}`
+> **시나리오 자동 만료 (M-13)**: 주입된 시나리오는 해제하지 않아도 자동 비활성화된다 — DRIFT는 plateau 도달 후 `plateau-hold-minutes`(기본 5분), STEP/SPIKE는 시작 후 `max-lifetime-minutes`(기본 30분). 만료되면 `GET /simulator/scenarios` 활성 목록에서 사라지고(`active=false`, `endedAt` 기록) 센서 값이 정상으로 돌아온다. 응답 shape 변화는 없다(수동 해제 `DELETE`는 그대로).
+
+
+param 기본값: DRIFT `{durationMin: 10}` (durationMin분에 crit 도달하는 기울기 자동 계산, 응답 param에 `slopePerSec`·`maxElapsedSec`·`targetValue` 포함. **상한 도달 후엔 목표값에서 고정**되어 해제하지 않아도 무한 상승하지 않음, plateau 유지 시간 뒤에는 시나리오 자동 만료) / SPIKE `{probability: 0.1, multiplier: 1.8}` / STEP `{offsetRatio: 0.15}`
 
 ## 9. 관리 /admin
 

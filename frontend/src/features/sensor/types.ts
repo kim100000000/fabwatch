@@ -34,6 +34,30 @@ export interface SensorThresholds {
   critHigh?: number | null
 }
 
+/** 차트 범례·기준선용 임계치 한 줄 */
+export interface ThresholdLine {
+  key: 'warnLow' | 'warnHigh' | 'critLow' | 'critHigh'
+  kind: 'warn' | 'crit'
+  /** 화면 라벨 — camelCase 필드명이 아니라 '경고 하한' 같은 한글 */
+  label: string
+  value: number
+}
+
+const THRESHOLD_LINE_DEFS: { key: ThresholdLine['key']; kind: ThresholdLine['kind']; label: string }[] = [
+  { key: 'warnLow', kind: 'warn', label: '경고 하한' },
+  { key: 'warnHigh', kind: 'warn', label: '경고 상한' },
+  { key: 'critLow', kind: 'crit', label: '위험 하한' },
+  { key: 'critHigh', kind: 'crit', label: '위험 상한' },
+]
+
+/** 설정된(null 이 아닌) 임계치만 '경고 하한 / 경고 상한 / 위험 하한 / 위험 상한' 순서로 돌려준다 — 실시간·이력 차트 공용 */
+export function thresholdLines(thresholds: SensorThresholds): ThresholdLine[] {
+  return THRESHOLD_LINE_DEFS.flatMap((def) => {
+    const value = thresholds[def.key]
+    return value === null || value === undefined ? [] : [{ ...def, value }]
+  })
+}
+
 /** GET /equipments/{id}/sensor-data/latest — 센서별 최신값 1건 (SensorLatestResponse) */
 export interface SensorLatest extends SensorThresholds {
   sensorId: number
@@ -134,6 +158,12 @@ export const SENSOR_TYPE_LABEL: Record<SensorType, string> = {
   VIBRATION: '진동',
   PRESSURE: '압력',
   CURRENT: '전류',
+}
+
+/** 센서 수준 표기 — 색 외에 글자로도 구분하기 위한 라벨 (NORMAL 은 표시하지 않는다) */
+export const SENSOR_LEVEL_LABEL: Record<Exclude<SensorLevel, 'NORMAL'>, string> = {
+  WARNING: '경고',
+  CRITICAL: '위험',
 }
 
 /** 카드/차트 정렬 순서 고정 (설비마다 센서 순서가 흔들리지 않게) */

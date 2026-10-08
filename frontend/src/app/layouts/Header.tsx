@@ -43,14 +43,17 @@ export function Header({ lineId, onLineChange }: HeaderProps) {
       <ShiftIndicator />
 
       {user && (
-        <div className="header-user">
+        <div className="header-user" title={`${user.name} (${ROLE_LABEL[user.role] ?? user.role})`}>
           <span className="user-name">{user.name}</span>
           <span className="user-role">{ROLE_LABEL[user.role] ?? user.role}</span>
         </div>
       )}
 
-      <button type="button" className="logout-btn" onClick={() => void logout()}>
-        로그아웃
+      <button type="button" className="logout-btn" onClick={() => void logout()} aria-label="로그아웃" title="로그아웃">
+        <span className="logout-text">로그아웃</span>
+        <span className="logout-icon" aria-hidden="true">
+          나가기
+        </span>
       </button>
     </header>
   )

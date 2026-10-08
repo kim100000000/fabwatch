@@ -56,7 +56,7 @@
 }
 
 .sensor-value[data-level='WARNING'] { color: var(--alarm-warning); }
-.sensor-value[data-level='CRITICAL'] { color: var(--alarm-critical); }
+.sensor-value[data-level='CRITICAL'] { color: var(--text-critical); }
 
 .sensor-value .sensor-unit {
   margin-left: 4px;
@@ -75,7 +75,7 @@
 }
 
 .sensor-threshold-legend .warn { color: var(--alarm-warning); }
-.sensor-threshold-legend .crit { color: var(--alarm-critical); }
+.sensor-threshold-legend .crit { color: var(--text-critical); }
 
 .sensor-chart-body {
   width: 100%;
@@ -226,7 +226,7 @@
 }
 
 .live-sensor[data-level='WARNING'] .value { color: var(--alarm-warning); }
-.live-sensor[data-level='CRITICAL'] .value { color: var(--alarm-critical); }
+.live-sensor[data-level='CRITICAL'] .value { color: var(--text-critical); }
 
 /* 임계치 초과 시 1회 깜빡임 (docs/04 §3) */
 .live-sensor[data-level='WARNING'] .value[data-flash='true'],
@@ -267,7 +267,7 @@
   padding: 1px 8px;
   border: 1px solid var(--status-down);
   border-radius: 4px;
-  color: var(--status-down);
+  color: var(--text-down);
   font-size: 11px;
   font-weight: 600;
 }
@@ -360,7 +360,7 @@
 }
 
 .threshold-current > div[data-kind='warn'] dt { color: var(--alarm-warning); }
-.threshold-current > div[data-kind='crit'] dt { color: var(--alarm-critical); }
+.threshold-current > div[data-kind='crit'] dt { color: var(--text-critical); }
 
 .threshold-fields {
   display: grid;
@@ -378,7 +378,7 @@
 }
 
 .threshold-fields .field[data-kind='warn'] label { color: var(--alarm-warning); }
-.threshold-fields .field[data-kind='crit'] label { color: var(--alarm-critical); }
+.threshold-fields .field[data-kind='crit'] label { color: var(--text-critical); }
 
 .threshold-fields .field input[aria-invalid='true'] {
   border-color: var(--alarm-critical);
@@ -386,7 +386,7 @@
 
 .field-error {
   margin: 0;
-  color: var(--alarm-critical);
+  color: var(--text-critical);
   font-size: 12px;
 }
 
@@ -447,7 +447,7 @@
 }
 
 .threshold-diff li[data-kind='warn'] .diff-label { color: var(--alarm-warning); }
-.threshold-diff li[data-kind='crit'] .diff-label { color: var(--alarm-critical); }
+.threshold-diff li[data-kind='crit'] .diff-label { color: var(--text-critical); }
 
 @media (max-width: 640px) {
   .threshold-current,
@@ -455,3 +455,17 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* 임계치 수준 글자 표식 (색약·흑백 화면 대응) */
+.level-mark {
+  margin-left: 4px;
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.level-mark[data-level='WARNING'] { color: var(--alarm-warning); }
+.level-mark[data-level='CRITICAL'] { color: var(--text-critical); }

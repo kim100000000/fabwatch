@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatAvailability, formatKpiRange, formatMtbf, formatMttr } from '@/shared/lib/kpiFormat'
 import { statusLabel } from '@/shared/lib/equipmentStatus'
-import { EmptyState, ErrorState, LoadingBlock } from '@/shared/ui'
+import { EmptyState, ErrorState, LoadingBlock, Term } from '@/shared/ui'
 import { useLineKpi } from '../api/useLineKpi'
 import { KpiPeriodToggle } from './KpiPeriodToggle'
 import { KpiTiles } from './KpiTiles'
@@ -103,9 +103,15 @@ function EquipmentKpiTable({ rows }: { rows: EquipmentKpiRow[] }) {
               <thead>
                 <tr>
                   <th>설비</th>
-                  <th>가동률</th>
-                  <th>MTBF</th>
-                  <th>MTTR</th>
+                  <th>
+                    <Term term="AVAILABILITY" />
+                  </th>
+                  <th>
+                    <Term term="MTBF" />
+                  </th>
+                  <th>
+                    <Term term="MTTR" />
+                  </th>
                   <th>{statusLabel('DOWN')} 횟수</th>
                 </tr>
               </thead>

@@ -14,7 +14,7 @@ import { EmptyState, ErrorState, LoadingBlock } from '@/shared/ui'
 import { useChartTokens } from '@/shared/lib/cssToken'
 import { formatKst, formatKstShort } from '@/shared/lib/datetime'
 import { useSensorHistory } from '../api/useSensorHistory'
-import { HISTORY_RANGES, SENSOR_TYPE_LABEL } from '../types'
+import { HISTORY_RANGES, SENSOR_TYPE_LABEL, thresholdLines } from '../types'
 import type { HistoryRange, SensorLatest } from '../types'
 import './sensor.css'
 
@@ -64,23 +64,7 @@ export function SensorHistoryChart({ equipmentId, sensors }: SensorHistoryChartP
     [points],
   )
 
-  const thresholds = useMemo(() => {
-    if (!sensor) return []
-    const entries: { value: number; kind: 'warn' | 'crit'; label: string }[] = []
-    if (sensor.warnLow !== null && sensor.warnLow !== undefined) {
-      entries.push({ value: sensor.warnLow, kind: 'warn', label: 'warnLow' })
-    }
-    if (sensor.warnHigh !== null && sensor.warnHigh !== undefined) {
-      entries.push({ value: sensor.warnHigh, kind: 'warn', label: 'warnHigh' })
-    }
-    if (sensor.critLow !== null && sensor.critLow !== undefined) {
-      entries.push({ value: sensor.critLow, kind: 'crit', label: 'critLow' })
-    }
-    if (sensor.critHigh !== null && sensor.critHigh !== undefined) {
-      entries.push({ value: sensor.critHigh, kind: 'crit', label: 'critHigh' })
-    }
-    return entries
-  }, [sensor])
+  const thresholds = useMemo(() => (sensor ? thresholdLines(sensor) : []), [sensor])
 
   const unit = sensor?.unit ?? ''
 
@@ -95,6 +79,7 @@ export function SensorHistoryChart({ equipmentId, sensors }: SensorHistoryChartP
               key={item.sensorId}
               type="button"
               className={item.sensorType === activeType ? 'filter-chip active' : 'filter-chip'}
+              aria-pressed={item.sensorType === activeType}
               onClick={() => setSensorType(item.sensorType)}
             >
               {SENSOR_TYPE_LABEL[item.sensorType] ?? item.sensorType}
@@ -110,6 +95,7 @@ export function SensorHistoryChart({ equipmentId, sensors }: SensorHistoryChartP
               key={item.key}
               type="button"
               className={item.key === range ? 'filter-chip active' : 'filter-chip'}
+              aria-pressed={item.key === range}
               onClick={() => setRange(item.key)}
             >
               {item.label}
@@ -128,7 +114,7 @@ export function SensorHistoryChart({ equipmentId, sensors }: SensorHistoryChartP
         </button>
       </div>
 
-      {loading && chartPoints.length === 0 && <LoadingBlock label="이력을 불러오는 중…" />}
+      {loading && <LoadingBlock label="이력을 불러오는 중…" />}
 
       {!loading && error && <ErrorState error={error} onRetry={refetch} />}
 
@@ -140,7 +126,7 @@ export function SensorHistoryChart({ equipmentId, sensors }: SensorHistoryChartP
         />
       )}
 
-      {!error && chartPoints.length > 0 && (
+      {!error && !loading && chartPoints.length > 0 && (
         <div className="sensor-history-body">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartPoints} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
@@ -186,7 +172,7 @@ export function SensorHistoryChart({ equipmentId, sensors }: SensorHistoryChartP
               />
               {thresholds.map((item) => (
                 <ReferenceLine
-                  key={item.label}
+                  key={item.key}
                   y={item.value}
                   stroke={item.kind === 'warn' ? tokens.warning : tokens.critical}
                   strokeDasharray="5 4"

@@ -16,10 +16,22 @@ spring:
 fabwatch:
   jwt:
     secret: fabwatch-test-secret-key-0123456789-0123456789-0123456789
+    # 테스트는 회전된 토큰 즉시 무효를 기본으로 검증한다. 유예(grace)는 전용 테스트가 속성으로 켠다
+    refresh-grace-seconds: 0
+  security:
+    rate-limit:
+      # 여러 통합 테스트가 한 컨텍스트(=한 IP 127.0.0.1)에서 수십 번 로그인하므로 기본 테스트에선 사실상 끈다. 전용 테스트가 낮춘다
+      auth-per-minute: 100000
   cors:
     allowed-origins: http://localhost:5173
   seed:
     enabled: false
+  sse:
+    # 통합 테스트의 결정성 — SSE를 호출 스레드에서 동기 전송한다. 비동기 경로는 전용 단위 테스트가 직접 검증한다
+    async: false
+  sensor:
+    retention:
+      chunk-pause-ms: 0   # 삭제 배치 청크 사이 대기 제거
   ai:
     # 테스트는 외부 네트워크를 절대 호출하지 않는다 (docs/12 T-3) — mock provider + 재시도 대기 0
     provider: mock

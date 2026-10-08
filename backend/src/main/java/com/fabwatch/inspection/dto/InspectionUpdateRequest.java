@@ -18,9 +18,9 @@ public record InspectionUpdateRequest(
         Inspection.Shift shift,
         @NotNull Instant startedAt,
         @NotNull Instant endedAt,
-        @NotBlank @Size(max = 65_535) String content,
-        @Size(max = 65_535) String actionTaken,
+        @NotBlank @Size(max = InspectionLimits.CONTENT_MAX) String content,
+        @Size(max = InspectionLimits.CONTENT_MAX) String actionTaken,
         Inspection.Cause4M cause4m,
         @Size(max = 300) String causeDetail,
-        @Valid List<CheckResultRequest> checkResults) {
+        @Valid @Size(max = InspectionLimits.CHECK_RESULTS_MAX) List<CheckResultRequest> checkResults) {
 }

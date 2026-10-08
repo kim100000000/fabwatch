@@ -4,7 +4,7 @@ import { useAuth } from '@/app/providers/useAuth'
 import { toApiError } from '@/shared/api'
 import { formatKst } from '@/shared/lib/datetime'
 import { toUserMessage } from '@/shared/lib/errorMessage'
-import { Spinner } from '@/shared/ui'
+import { Spinner, Term } from '@/shared/ui'
 import { updatePmSchedule } from '../api/inspectionApi'
 import { PM_CYCLE_LABEL, WEEKDAY_LABEL, describeCycle } from '../types'
 import type { PmCycleType, PmSchedule } from '../types'
@@ -14,6 +14,10 @@ interface PmScheduleCardProps {
   equipmentId: number
   /** 해당 설비 PM 스케줄 — 아직 설정 전이면 null */
   schedule: PmSchedule | null
+  /** 스케줄 조회 중 — true 면 '설정되지 않았습니다' 대신 로딩 문구를 보여준다 */
+  loading?: boolean
+  /** 스케줄 조회 실패 — true 면 '미설정'으로 오인되지 않게 설정 버튼과 안내를 숨긴다 */
+  failed?: boolean
   /** 주기 설정 성공 — 부모가 스케줄을 다시 읽는다 */
   onSaved: () => void
 }
@@ -25,9 +29,10 @@ const CYCLE_TYPES: PmCycleType[] = ['DAILY', 'WEEKLY', 'MONTHLY']
  * 주기 / 마지막 완료 / 다음 예정일을 보여주고, OVERDUE 면 빨강 + 경과일.
  * 주기 설정·변경 폼은 ENGINEER+ 만 (PUT /equipments/{id}/pm-schedule — 서버가 nextDueAt 재계산).
  */
-export function PmScheduleCard({ equipmentId, schedule, onSaved }: PmScheduleCardProps) {
+export function PmScheduleCard({ equipmentId, schedule, loading = false, failed = false, onSaved }: PmScheduleCardProps) {
   const { user } = useAuth()
-  const canEdit = user?.role === 'ADMIN' || user?.role === 'ENGINEER'
+  // 조회 중/실패 상태에서는 미설정으로 오인한 채 덮어쓰지 않도록 편집을 막는다
+  const canEdit = (user?.role === 'ADMIN' || user?.role === 'ENGINEER') && !loading && !failed
 
   const [editing, setEditing] = useState(false)
   const [cycleType, setCycleType] = useState<PmCycleType>(schedule?.cycleType ?? 'WEEKLY')
@@ -72,7 +77,9 @@ export function PmScheduleCard({ equipmentId, schedule, onSaved }: PmScheduleCar
   return (
     <div className="pm-card" data-overdue={schedule?.overdue ? 'true' : 'false'}>
       <div className="pm-card-head">
-        <span className="pm-card-title">PM 스케줄</span>
+        <span className="pm-card-title">
+          <Term term="PM" /> 스케줄
+        </span>
         {canEdit && !editing && (
           <button type="button" className="btn btn-sm" onClick={openEditor}>
             {schedule ? '주기 변경' : '주기 설정'}
@@ -96,13 +103,17 @@ export function PmScheduleCard({ equipmentId, schedule, onSaved }: PmScheduleCar
               {formatKst(schedule.nextDueAt)}
               {schedule.overdue
                 ? schedule.overdueDays > 0
-                  ? ` · OVERDUE ${schedule.overdueDays}일 경과`
-                  : ' · OVERDUE'
+                  ? ` · PM 지연 ${schedule.overdueDays}일 경과`
+                  : ' · PM 지연'
                 : ''}
             </dd>
           </div>
         </dl>
-      ) : (
+      ) : loading ? (
+        <p className="field-hint" role="status">
+          PM 스케줄을 불러오는 중…
+        </p>
+      ) : failed ? null : (
         <p className="field-hint">PM 스케줄이 설정되지 않았습니다.{canEdit ? ' [주기 설정]으로 등록하세요.' : ''}</p>
       )}
 

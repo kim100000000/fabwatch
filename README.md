@@ -81,7 +81,7 @@ flowchart LR
 | Frontend | React 18, TypeScript, Vite, Recharts, react-markdown |
 | 실시간 | SSE (단방향 푸시라 WebSocket 불필요) + 폴링 폴백 |
 | AI | Claude API (`claude-sonnet-5-5`), 비동기 생성(202 + 폴링) |
-| 테스트 | JUnit 5, MockMvc, H2(MySQL 모드) — 백엔드 430개+ |
+| 테스트 | JUnit 5, MockMvc, H2(MySQL 모드) — 백엔드 570개+, 프론트 60개+ |
 
 ## 실행 방법
 
@@ -104,7 +104,7 @@ npm run dev
 
 환경변수 이름은 [`.env.example`](.env.example), 전체 표는 [docs/13](docs/13_배포운영명세서.md)에 있습니다. 비밀값은 `.env`/환경변수로만 주입하고 커밋하지 않습니다.
 
-**데모 계정(로컬 시드 전용, 가상 계정)** — 비밀번호는 시드 코드(`LocalDataSeeder`)에 있으며 로그인 화면에도 계정이 안내됩니다.
+**데모 계정(로컬 시드 전용, 가상 계정)** — 비밀번호는 시드 코드(`LocalDataSeeder`)에 있고, 개발 모드의 로그인 화면에는 '데모 계정' 버튼이 있습니다(운영 빌드에서는 `VITE_DEMO_LOGIN=false`가 기본이라 계정 정보가 노출되지 않습니다).
 
 | 역할 | ID | 할 수 있는 것 |
 |---|---|---|

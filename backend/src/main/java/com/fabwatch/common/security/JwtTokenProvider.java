@@ -17,8 +17,7 @@ import java.util.UUID;
 /**
  * JWT 발급/검증 (docs/11 §2).
  * - Access: JWT(HS256), 30분, claims = sub(userId) / role / name
- * - Refresh: 불투명 랜덤 문자열(UUID + SecureRandom), 14일, DB 저장
- *   형식은 "{userId}.{random}" — 재사용 감지 시 어떤 사용자의 세션을 무효화할지 식별하기 위함.
+ * - Refresh: 불투명 랜덤 문자열(UUID + SecureRandom 256bit), 14일, DB에는 SHA-256 해시만 저장(refresh_tokens)
  */
 @Component
 public class JwtTokenProvider {
@@ -59,32 +58,22 @@ public class JwtTokenProvider {
                 claims.get("role", String.class));
     }
 
-    /** 불투명 Refresh 토큰 생성. "{userId}.{random}" */
-    public String createRefreshToken(Long userId) {
+    /**
+     * 불투명 Refresh 토큰 생성. 사용자 식별자를 담지 않는다 — 서버는 토큰의 SHA-256 해시로만 조회하므로
+     * 토큰만 보고 사용자를 특정하거나 비인증 요청으로 특정 사용자의 세션을 건드릴 수 없다 (보안 감사 H-1).
+     */
+    public String createRefreshToken() {
         byte[] buffer = new byte[32];
         RANDOM.nextBytes(buffer);
-        String random = UUID.randomUUID() + "-" + Base64.getUrlEncoder().withoutPadding().encodeToString(buffer);
-        return userId + "." + random;
-    }
-
-    /** Refresh 토큰에서 사용자 ID 추출. 형식이 깨졌으면 null. */
-    public Long extractUserIdFromRefreshToken(String refreshToken) {
-        if (refreshToken == null) {
-            return null;
-        }
-        int dot = refreshToken.indexOf('.');
-        if (dot <= 0) {
-            return null;
-        }
-        try {
-            return Long.valueOf(refreshToken.substring(0, dot));
-        } catch (NumberFormatException e) {
-            return null;
-        }
+        return UUID.randomUUID() + "-" + Base64.getUrlEncoder().withoutPadding().encodeToString(buffer);
     }
 
     public Instant refreshTokenExpiresAt() {
-        return Instant.now().plus(refreshExp);
+        return refreshTokenExpiresAt(Instant.now());
+    }
+
+    public Instant refreshTokenExpiresAt(Instant from) {
+        return from.plus(refreshExp);
     }
 
     public long accessTokenExpiresInSeconds() {

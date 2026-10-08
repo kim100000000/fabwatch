@@ -141,6 +141,7 @@ export function InspectionFilterBar({
               className={value.workerId === currentUserId ? 'filter-chip active' : 'filter-chip'}
               aria-pressed={value.workerId === currentUserId}
               title="내가 작업한 점검만 보기"
+              aria-label="내가 작업한 점검만 보기"
               onClick={() => update({ workerId: value.workerId === currentUserId ? null : currentUserId })}
             >
               나

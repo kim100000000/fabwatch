@@ -3,6 +3,7 @@ package com.fabwatch.simulator.service;
 import com.fabwatch.common.dto.PageResponse;
 import com.fabwatch.common.exception.BusinessException;
 import com.fabwatch.common.exception.ErrorCode;
+import com.fabwatch.common.util.LogSanitizer;
 import com.fabwatch.equipment.service.EquipmentQueryService;
 import com.fabwatch.sensor.service.SensorQueryService;
 import com.fabwatch.sensor.service.SensorSpec;
@@ -68,8 +69,9 @@ public class ScenarioService {
                 .startedAt(Instant.now())
                 .build());
 
+        // param은 검증된 숫자만 담긴 정규화 결과지만, 로그 인젝션 방지를 위해 한 번 더 정리한다
         log.info("시나리오 주입: id={}, sensorId={}, type={}, param={}",
-                scenario.getId(), scenario.getSensorId(), scenario.getType(), param);
+                scenario.getId(), scenario.getSensorId(), scenario.getType(), LogSanitizer.clean(String.valueOf(param)));
         return toResponse(scenario);
     }
 
@@ -88,7 +90,7 @@ public class ScenarioService {
      * 지정 설비(생략 시 첫 번째 설비)의 진동 센서에 DRIFT를 주입한다 — 데모용 기본 2분
      * (fabwatch.simulator.demo-duration-min)에 걸쳐 crit에 도달하며 3분 시연 안에
      * 정상 → 드리프트 → WARNING → CRITICAL → 자동 DOWN → 알람 흐름이 순서대로 일어난다.
-     * 도달 후에는 목표값에서 고정된다(DRIFT plateau).
+     * 도달 후에는 목표값에서 고정되고(DRIFT plateau), plateau-hold-minutes(기본 5분)가 지나면 시나리오가 자동 만료된다.
      * 이미 주입돼 있으면 그대로 두고 현재 시나리오를 반환한다(데모 중 중복 클릭 대비).
      */
     @Transactional
@@ -106,7 +108,7 @@ public class ScenarioService {
 
         if (!scenarioRepository.existsBySensorIdAndTypeAndActiveTrue(target.sensorId(), SimulationScenario.Type.DRIFT)) {
             inject(new ScenarioCreateRequest(target.sensorId(), SimulationScenario.Type.DRIFT,
-                    Map.of("durationMin", properties.demoDurationMin())));
+                    Map.of("durationMin", Math.min(properties.demoDurationMin(), ScenarioParams.MAX_DURATION_MIN))));
         }
         return getActiveScenarios();
     }
@@ -151,7 +153,7 @@ public class ScenarioService {
             return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {
             });
         } catch (Exception e) {
-            log.warn("시나리오 파라미터 파싱 실패 — 빈 값으로 대체: {}", json);
+            log.warn("시나리오 파라미터 파싱 실패 — 빈 값으로 대체: {}", LogSanitizer.clean(json));
             return Map.of();
         }
     }

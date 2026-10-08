@@ -1,6 +1,7 @@
 package com.fabwatch.auth.controller;
 
 import com.fabwatch.auth.dto.LoginRequest;
+import com.fabwatch.auth.dto.LogoutRequest;
 import com.fabwatch.auth.dto.TokenRefreshRequest;
 import com.fabwatch.auth.dto.TokenResponse;
 import com.fabwatch.auth.service.AuthService;
@@ -33,10 +34,10 @@ public class AuthController {
         return authService.refresh(request);
     }
 
-    /** 로그인 필요 — DB의 Refresh 무효화 */
+    /** 로그인 필요 — 제시된 Refresh의 세션만 무효화(본문 생략 시 본인의 모든 세션) */
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout() {
-        authService.logout(SecurityUtils.currentUserId());
+    public ResponseEntity<Void> logout(@Valid @RequestBody(required = false) LogoutRequest request) {
+        authService.logout(SecurityUtils.currentUserId(), request == null ? null : request.refreshToken());
         return ResponseEntity.noContent().build();
     }
 }

@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/shared/hooks/usePageTitle'
 import { useMemo, useState } from 'react'
 import { EMPTY_REPORT_FILTER, ReportFilterBar, ReportTable, useAiReportList } from '@/features/aireport'
 import type { ReportFilterValue } from '@/features/aireport'
@@ -11,6 +12,7 @@ import { EmptyState, ErrorState, LoadingBlock, Pagination } from '@/shared/ui'
  * - 리포트 생성은 설비 상세·알람·점검 이력 화면의 진입점에서 한다
  */
 export function ReportListPage() {
+  usePageTitle('AI 리포트')
   const [filter, setFilter] = useState<ReportFilterValue>(EMPTY_REPORT_FILTER)
   const [page, setPage] = useState(0)
 

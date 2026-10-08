@@ -34,3 +34,39 @@
   font-size: 24px;
   font-weight: 700;
 }
+
+.kpi-item[data-pm-overdue='true'] { border-top-color: var(--status-pm); }
+
+/* 조치 필요 요약 줄 */
+.attention-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px 20px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--alarm-major);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  font-size: 13px;
+}
+
+.attention-banner b {
+  font-weight: 700;
+}
+
+.attention-banner .inline-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--accent);
+  font-size: inherit;
+  text-decoration: underline;
+}
+
+.demo-hint {
+  margin: 0 0 16px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}

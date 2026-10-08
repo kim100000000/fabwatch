@@ -29,11 +29,17 @@ interface DemoControlPanelProps {
 export function DemoControlPanel({ equipments, sensorsByEquipment }: DemoControlPanelProps) {
   const [open, setOpen] = useState(false)
   const [scenarios, setScenarios] = useState<Scenario[]>([])
-  const [equipmentId, setEquipmentId] = useState<number | null>(equipments[0]?.id ?? null)
+  // 사용자가 고른 설비 id. 비어 있거나 목록에 없으면(목록이 늦게 도착하는 경우 포함) 첫 설비로 파생한다.
+  const [selectedEquipmentId, setSelectedEquipmentId] = useState<number | null>(null)
   const [sensorId, setSensorId] = useState<number | null>(null)
   const [type, setType] = useState<ScenarioType>('DRIFT')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const equipmentId =
+    selectedEquipmentId !== null && equipments.some((equipment) => equipment.id === selectedEquipmentId)
+      ? selectedEquipmentId
+      : (equipments[0]?.id ?? null)
 
   const sensors = equipmentId !== null ? (sensorsByEquipment[equipmentId] ?? []) : []
 
@@ -54,6 +60,16 @@ export function DemoControlPanel({ equipments, sensorsByEquipment }: DemoControl
     void reload(controller.signal)
     return () => controller.abort()
   }, [open, reload])
+
+  // Esc 로 패널 닫기
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open])
 
   // 설비를 바꾸면 선택 중인 센서가 목록에 없어진다 — 그때는 첫 센서로 자동 대체 (별도 effect 불필요)
   const activeSensorId =
@@ -125,12 +141,12 @@ export function DemoControlPanel({ equipments, sensorsByEquipment }: DemoControl
             id="demo-equipment"
             value={equipmentId ?? ''}
             onChange={(event) =>
-              setEquipmentId(event.target.value ? Number(event.target.value) : null)
+              setSelectedEquipmentId(event.target.value ? Number(event.target.value) : null)
             }
           >
             {equipments.map((equipment) => (
               <option key={equipment.id} value={equipment.id}>
-                {equipment.code}
+                {equipment.code} {equipment.name}
               </option>
             ))}
           </select>

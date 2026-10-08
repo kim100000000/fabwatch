@@ -49,6 +49,21 @@
   color: var(--text-secondary);
 }
 
+.alarm-scroll {
+  max-height: calc(100vh - 300px);
+  min-height: 240px;
+  overflow: auto;
+}
+
+/* 표 헤더 고정 — 스크롤해도 열 이름이 보인다 */
+.alarm-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-card);
+  box-shadow: 0 1px 0 var(--border);
+}
+
 .alarm-table .alarm-message {
   white-space: normal;
   min-width: 220px;
@@ -95,7 +110,7 @@
   color: var(--text-secondary);
 }
 
-.alarm-status[data-status='OPEN'] { color: var(--alarm-critical); }
+.alarm-status[data-status='OPEN'] { color: var(--text-critical); }
 .alarm-status[data-status='ACK'] { color: var(--alarm-warning); }
 .alarm-status[data-status='RESOLVED'] { color: var(--status-run); }
 
@@ -149,6 +164,10 @@
 
 .alarm-stream-item[data-severity='MAJOR'] { border-left-color: var(--alarm-major); }
 .alarm-stream-item[data-severity='CRITICAL'] { border-left-color: var(--alarm-critical); }
+
+.alarm-stream-item[data-old='true'] {
+  opacity: 0.6;
+}
 
 .alarm-stream-item:last-child {
   border-bottom: none;
@@ -208,4 +227,14 @@
 
 .alarm-summary strong {
   color: var(--text-primary);
+}
+
+.alarm-count-note {
+  margin: 0 0 8px;
+}
+
+.alarm-more {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
 }

@@ -1,6 +1,7 @@
 import type { EquipmentSummary } from '@/features/equipment'
+import { statusLabel } from '@/shared/lib/equipmentStatus'
 import { StatusBadge } from '@/shared/ui'
-import { SENSOR_TYPE_LABEL } from '../types'
+import { SENSOR_LEVEL_LABEL, SENSOR_TYPE_LABEL } from '../types'
 import type { SensorLatest } from '../types'
 import './sensor.css'
 
@@ -8,8 +9,10 @@ interface EquipmentLiveCardProps {
   equipment: EquipmentSummary
   /** 센서별 최신값 (SSE 로 2초마다 갱신) */
   sensors: SensorLatest[]
-  /** 미조치(OPEN/ACK) 알람 수 */
-  openAlarmCount: number
+  /** 미해결(OPEN/ACK) 알람 수 — 집계 전/실패 시 null (0 으로 폴백하지 않는다) */
+  openAlarmCount: number | null
+  /** 알람 집계 조회가 실패했는지 (null 일 때 '…' 대신 '확인 실패' 표시) */
+  alarmCountFailed?: boolean
   /** 방금 갱신된 센서 id 집합 — 임계치 초과 시 1회 깜빡임 */
   flashSensorIds?: ReadonlySet<number>
   onSelect: (equipmentId: number) => void
@@ -23,6 +26,7 @@ export function EquipmentLiveCard({
   equipment,
   sensors,
   openAlarmCount,
+  alarmCountFailed = false,
   flashSensorIds,
   onSelect,
 }: EquipmentLiveCardProps) {
@@ -31,6 +35,9 @@ export function EquipmentLiveCard({
       type="button"
       className="live-card"
       data-status={equipment.status}
+      aria-label={`${equipment.code} ${equipment.name}, 상태 ${statusLabel(equipment.status)}, 미해결 알람 ${
+        openAlarmCount === null ? (alarmCountFailed ? '확인 실패' : '집계 중') : `${openAlarmCount}건`
+      }${equipment.pmOverdue ? ', PM 지연' : ''}, 상세 보기`}
       onClick={() => onSelect(equipment.id)}
     >
       <div className="live-card-top">
@@ -50,6 +57,12 @@ export function EquipmentLiveCard({
                   : sensor.value.toFixed(1)}
                 {sensor.unit ? ` ${sensor.unit}` : ''}
               </span>
+              {/* 색만으로 구분하지 않도록 임계치 초과는 글자 표식을 함께 쓴다 */}
+              {sensor.level && sensor.level !== 'NORMAL' && (
+                <span className="level-mark" data-level={sensor.level}>
+                  {SENSOR_LEVEL_LABEL[sensor.level]}
+                </span>
+              )}
             </span>
           ))}
         </div>
@@ -58,11 +71,16 @@ export function EquipmentLiveCard({
       )}
 
       <div className="live-card-foot">
-        <span className="live-alarm-count" data-zero={openAlarmCount === 0}>
-          ⚠ 미조치 {openAlarmCount}
+        <span className="live-alarm-count" data-zero={openAlarmCount === 0 || openAlarmCount === null}>
+          ⚠ 미해결 알람 {openAlarmCount ?? (alarmCountFailed ? '확인 실패' : '…')}
         </span>
-        {/* PM OVERDUE 배지 — 대시보드가 GET /pm-schedules?overdueOnly=true 결과를 pmOverdue 로 합쳐 내려준다 (docs/04 §3 S-1) */}
-        {equipment.pmOverdue && <span className="pm-overdue-badge">PM OVERDUE</span>}
+        {/* PM 지연 표시 — 대시보드가 GET /pm-schedules?overdueOnly=true 결과를 pmOverdue 로 합쳐 내려준다 (docs/04 §3 S-1).
+            건수 요약은 대시보드 상단에 있어 카드에는 작게만 표시한다 */}
+        {equipment.pmOverdue && (
+          <span className="pm-overdue-badge" title="PM 예정일이 지났습니다">
+            PM 지연
+          </span>
+        )}
       </div>
     </button>
   )

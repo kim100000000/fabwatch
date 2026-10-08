@@ -17,8 +17,11 @@ import java.time.Instant;
  * 센서 원본 데이터 (docs/05 sensor_data) — 7일 보관 후 배치 삭제. soft delete 대상 아님.
  */
 @Entity
-@Table(name = "sensor_data",
-        indexes = @Index(name = "idx_sensor_data_sensor_measured", columnList = "sensor_id, measured_at"))
+@Table(name = "sensor_data", indexes = {
+        @Index(name = "idx_sensor_data_sensor_measured", columnList = "sensor_id, measured_at"),
+        // 7일 보존 배치(measured_at < cutoff 청크 삭제)와 1분 집계의 시간 범위 스캔용 — 없으면 풀스캔 (docs/15 §7)
+        @Index(name = "idx_sensor_data_measured", columnList = "measured_at")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SensorData extends BaseEntity {

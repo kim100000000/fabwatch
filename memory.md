@@ -109,19 +109,30 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 - [x] **최종 점검(체크리스트)**: 에러 응답 포맷 전 경로 통일 확인 — 405/415가 500으로 나오던 결함 수정(406 포함, JSON 강제), 비밀키 히스토리 점검 clean, `// TENANT:` 확인, NFR-1 실측(SSE 지연 중앙값 32ms)
 - [x] **QA(임계치·헤더·필터)**: HIGH 0 / MED 4 수정 — 서버가 소수 3자리·정수 8자리 초과를 안 막던 것(@Digits), 4값 전부 비우면 센서 감시가 꺼지던 것(서버+프론트 차단), Modal 포커스 트랩·제출 중 닫기 방지, docs/14 에러코드 색인. **범위 밖 발견 X-1**: application.yml이 AiProperties 기본값(4096/60초)을 2000/30초로 덮어써 F-6 QA H-1 수정이 무효였음 → yml 정정 + yml 바인딩 검증 테스트 추가(기본값만 보던 테스트가 못 잡은 것). 테스트 411→434. 리포트 `.claude/_workspace/qa/f2f3-임계치헤더작업자필터_20261006.md`
 
+### 배포 전 종합 점검 및 수정 (2026-10-06 ~ 10-08) — 완료
+- 4개 리뷰(보안/백엔드/프론트/UI·UX) → 수정 3묶음(백엔드 보안, 백엔드 안정성, 프론트) 모두 반영. 테스트 백엔드 434→**578**, 프론트 **61**(vitest 신규), 빌드/lint 통과. 실MySQL·브라우저로 라이브 확인.
+- **보안**: refresh 비인증 로그아웃 차단(불일치 토큰은 401만, 서버 세션 유지), refresh_tokens 테이블(SHA-256 해시 저장·사용자당 최대 5세션·회전+10초 grace — 같은 데모 계정을 여러 명이 써도 서로 안 끊김), 로그인 실패 카운터 비관적 락+없는 이메일 더미 BCrypt(응답 시간 139ms vs 149ms로 평준화), IP별 레이트 리밋(인메모리 30/분, 429 RATE_LIMITED+Retry-After), 본문 1MB 상한(413), SSE 전역 200·사용자당 5 상한, 시뮬레이터 파라미터 범위 검증, 500 방지(reason 200자 절단·점검 content 20000자·잘못된 sort 400·DataIntegrity 409), 로그 인젝션 정제, docker-compose MySQL 127.0.0.1 바인딩. 재사용 탐지(전체 세션 무효화)는 비인증 강제 로그아웃 취약점의 원인이라 제거(docs/11 명시).
+- **안정성**: 센서 원본 삭제 배치 청크화+(measured_at) 인덱스+cron UTC(풀스캔 해소), 수집 틱 분리(원본 저장 커밋 후 센서별 오류 격리, 알람+자동 DOWN은 한 트랜잭션, SSE는 AFTER_COMMIT+구독자별 큐 비동기·느린 구독자 제거), 설비 상태 전환 비관 락(동시 변경 시 KPI 오염 방지), 시나리오 자동 만료(DRIFT plateau 후 5분·STEP/SPIKE 30분), 센서 이력 조회 31일 상한+포인트 상한 다운샘플링(5M/1H), PM 수정 시 스케줄 재계산·PM 지연 배치 건별 격리, 인덱스 추가, graceful shutdown·Hikari. 라이브 실측: 구조 변경 후에도 경고 ~50초→자동 DOWN 104초.
+- **프론트**: 401 후 재시도 실패를 세션 만료로 오인하던 버그 수정(리프레시 거부 시에만 로그아웃), 설비 목록 미해결 알람 0 오류 수정(알람 API 집계), 전역 ErrorBoundary/errorElement, 폴링 폴백 stale 덮어쓰기 수정, vercel.json SPA rewrites, 운영 빌드의 localhost 폴백 제거, 로그인 화면(데모 계정 버튼은 `VITE_DEMO_LOGIN`일 때만, 내부 문서 번호 제거), /admin ADMIN 한정, 대시보드 정렬·'조치 필요' 요약, 알람 센터(기본 미해결·점검 등록 바로가기 alarmId), 임계치 한글 라벨, 차트 5분 프리로드, 용어 툴팁(glossary), 390px 헤더, 접근성(글자용 색 토큰·포커스·reduced-motion·skip link·page title), SSE 20초 무수신 시 폴링 보강.
+- 점검 원문: 보안 `.claude/_workspace/review/security_20261006.md`(나머지 3개는 파일 저장 안 됨, 위 요약이 전부).
+
 ### 남음
-- [ ] **실 Claude API 호출 검증** (ANTHROPIC_API_KEY 필요, `AI_PROVIDER=claude`): 응답 형식·토큰·지연(60초 내)·effort low 품질 확인. (yml 기본값 정정 후 처음 실제 값 4096/60이 적용되는 상태)
-- [ ] **배포(Railway 백+DB, Vercel 프론트)** — 사용자 계정/외부 공개 필요. 저장소 준비(Dockerfile/설정/환경변수/CORS/application-prod) → 사용자 확인 후 실배포 → 스모크
-- [ ] 포트폴리오 마무리: 이력서용 3줄 설명, 시연 GIF/영상(선택), 배포 URL을 README에 반영, 지인 1명 3분 테스트, 태블릿 폭 실확인(코드 기준 확인만 됨)
-- [ ] 여유분(Should): 사용자 등록/비활성화(FR-1.3), 교대 인수인계 요약(FR-6.5)
-- [ ] **로컬 DB 정리 필요**: `sensor_threshold_logs`에 UI 검증용 테스트 이력 4건(id 1~4, 사유 "UI 검증용…")이 남아 있음 — 삭제 시도가 권한 규칙에 막혀 못 지움. 시연 전에 사용자가 직접 삭제: `docker exec fabwatch-mysql mysql -ufabwatch -pfabwatch_local fabwatch -e "delete from sensor_threshold_logs where id in (1,2,3,4)"`
+- [ ] **실 Claude API 호출 검증** (ANTHROPIC_API_KEY 필요, `AI_PROVIDER=claude`): 응답 형식·토큰·지연(60초 내)·effort low 품질. yml 기본값 정정 후 처음으로 실제 4096/60이 적용됨.
+- [ ] **배포 준비**(AWS 단일 EC2+docker compose 방향으로 논의됨, 지원 시작 시점에 가입 권장 — Free 플랜 $200·6개월, 자동 청구 없음, Budgets 알림): ① **Flyway V1__init.sql**(prod ddl-auto=validate라 refresh_tokens·신규 인덱스 4개 포함해 스키마를 만들어야 함; docs/13에 refresh_tokens DDL 있음) ② **운영 ADMIN 부트스트랩**(환경변수, users 비었을 때만; 운영에서 시드·fabwatch123 금지) ③ `spring.profiles.default: local` 제거 ④ jar에 application-local.yml 포함 문제(.dockerignore/빌드 제외) ⑤ 다단계 Dockerfile(비루트)·docker-compose.prod·nginx/Caddy(SSE 프록시 버퍼링 off, 보안 헤더/CSP) ⑥ `server.forward-headers-strategy=framework`(레이트 리밋 IP), CORS `Access-Control-Expose-Headers: Retry-After` ⑦ JWT_SECRET 필수 고정
+- [ ] 포트폴리오 마무리: 이력서용 3줄 설명, 시연 GIF/영상(선택), 배포 URL을 README에 반영(README 스크린샷 중 01은 최신, 나머지 02~05는 이전 UI 기준 — 필요 시 재촬영), 지인 1명 3분 테스트, 태블릿 폭 실확인(코드 기준만)
+- [ ] 여유분(Should): 사용자 등록/비활성화·비밀번호 변경(FR-1.3, 운영에서 시드 계정 비밀번호 문제 해소에도 필요), 교대 인수인계 요약(FR-6.5)
+- [ ] **로컬 DB 정리 필요(사용자 직접)**: `sensor_threshold_logs` id 1~4(UI 검증용 테스트 이력) — 권한 규칙으로 내가 못 지움: `docker exec fabwatch-mysql mysql -ufabwatch -pfabwatch_local fabwatch -e "delete from sensor_threshold_logs where id in (1,2,3,4)"`
 
 ## 5. 다음 작업 지시 (그대로 실행 가능)
 
 ```
-다음: 4주차 남은 것 — (1) 배포 준비·실배포(사용자 확인 필요: Railway/Vercel 계정, 공개 URL), (2) 이력서 3줄·시연 GIF, (3) 실 Claude 호출 검증(키 준비 시 최우선).
-   배포 준비는 저장소 쪽만 먼저 가능: backend Dockerfile, application-prod.yml(환경변수 주입, ddl-auto 정책, CORS 허용 오리진), vercel.json(SPA 라우팅·API 베이스 URL), docs/13 절차 점검.
-   배포 환경 주의: JWT_SECRET 필수 고정(미설정 시 재시작마다 로그인 풀림), SSE 프록시/타임아웃, AI 쿼터·키는 환경변수, 시드 계정 비밀번호는 데모용임을 README에 명시, MySQL @Lob 길이 이슈는 해결됨.
+다음: 배포 준비(위 '남음' 참고) — 코드 기능 개발과 배포 전 점검 수정은 끝남. 사용자가 배포 시점을 정하면 Flyway/부트스트랩/Dockerfile부터. 실 Claude 호출은 키 준비 시 최우선 검증.
+
+기술 부채·후속(우선순위 낮음):
+   - react-router-dom 7 업그레이드(moderate 취약점 2건, major라 미적용), 번들 937kB(EquipmentDetailPage·ReportDetailPage lazy 분할 + 공용 CSS를 shared로 이전해야 가능), FSD 개편(EquipmentDetailTabs가 4개 feature를 런타임 import, features→app useAuth 9곳)
+   - 백엔드에 `EquipmentSummaryResponse.openAlarmCount/pmOverdue` 추가하면 프론트 알람 집계 호출 제거 가능, KPI `ongoingDown` 필드(K-1), 점검 폼 12시간제 입력
+   - 레이트 리밋·SSE 상한·AI 쿼터는 인메모리 단일 인스턴스 전제(`// SCALE:`), 계정 존재 노출(잠금 응답)·계정 잠금 DoS는 IP 리밋으로만 완화
+   - 알람 저장+자동 DOWN을 한 트랜잭션으로 묶음: autoDown이 지속 실패하는 센서는 알람도 안 생기고 2초마다 WARN 반복(판단 필요 시 재검토)
 
 임계치/헤더/필터 후속(QA LOW 이월):
    - 권한 없는 사용자가 잘못된 본문을 보내면 403 대신 400이 먼저 나옴(@Valid가 @PreAuthorize보다 먼저). 보안 위험 낮음(공개 제약 메시지뿐). 완화: 변경성 엔드포인트를 SecurityConfig URL 규칙으로도 차단 + 최저 권한 역할 403 테스트
@@ -162,6 +173,7 @@ F-3 이월/후속 (우선순위 순):
 
 | 날짜 | 작업 | 결과/결정 |
 |---|---|---|
+| 2026-10-08 | **배포 전 점검 수정 완료·통합 검증** (리뷰 4종 → 수정 3묶음 병렬: 백엔드 보안 / 백엔드 안정성 / 프론트) | 보안 HIGH 3·백엔드 HIGH 3·프론트 HIGH 5·UI/UX HIGH 5 중 배포 비종속 항목 전부 수정(refresh 비인증 로그아웃 차단·다중 세션 해시, 레이트 리밋/본문/SSE 상한, 수집 틱 분리·삭제 배치 청크화·설비 락·시나리오 만료, 프론트 오인 로그아웃·미해결 알람 0·ErrorBoundary·로그인/대시보드/알람센터 UX·접근성). 테스트 백엔드 578·프론트 61(vitest 신규). 실서버 확인: 위조 refresh 401, 2기기 동시 refresh 200/200, 해시 저장, 413, 400(sort/40일 조회), 로그인 타이밍 평준화, 레이트 리밋 429, 데모 경고~50초→자동 DOWN 104초. 에이전트 한도 오류로 중단된 작업은 SendMessage로 재개해 완료. 배포 종속 항목(Flyway·ADMIN 부트스트랩·프로파일·Dockerfile)과 실 Claude 호출 검증은 남음 |
 | 2026-10-06 | **개발 마무리: 설비 상세 헤더·임계치 편집 화면·작업자 필터 + 최종 점검** (하네스: backend/frontend 병렬 → mes-qa → 수정 → 라이브 검증) | FR-2.3/2.4/3.5 완료(체크리스트 Must 미완 항목 해소), /users/lookup, 405·415·406 핸들러, 임계치 자릿수·전부 비우기 차단, Modal 접근성. 최종 점검: 에러 포맷 전 경로 통일, 비밀키 clean, NFR-1 실측 32ms. QA에서 범위 밖 X-1 발견(yml이 AI 기본값 덮어씀 → F-6 수정 무효였음)→정정·바인딩 테스트. 테스트 411→434. 에이전트가 만든 임계치 테스트 이력 4건은 권한 규칙으로 삭제 못 해 남아 있음(사용자 정리 필요) |
 | 2026-10-03 | **4주차 KPI + 시뮬레이터 개선 + README/스크린샷** (하네스: backend/frontend 병렬 → mes-qa → 수정 → 라이브 검증) | KPI(가동률/MTBF/MTTR, KST 절삭·합산 재계산)·설비 상세/대시보드 위젯, DRIFT plateau(crit+1σ)+데모 2분(실측 경고 52초→자동 DOWN 100~109초). 테스트 365→411. QA HIGH 0, MED 3 수정, 손계산 3건 실DB 일치. 라이브에서 확인: 숨김 탭은 폴링 중지(설계), 세션은 curl 로그인이 refresh token을 교체해 브라우저 세션을 끊을 수 있음(사용자당 1개 저장). README.md+스크린샷 5장 작성. 데모 환경 정리 후 커밋. 배포·이력서 3줄·실Claude 호출 검증은 남음 |
 | 2026-10-03 | **3주차 F-6 AI 리포트** (하네스: backend/frontend 병렬 → mes-qa → 수정 2개 병렬 → 라이브 검증) | aireport 도메인(비동기 202, 쿼터, 호출 로그, 키 마스킹, 인젝션 방어, 확정본 불변), S-7+설비 리포트 탭+생성 진입점. 테스트 235→365, 프론트 build/lint 통과. QA에서 HIGH 1(Sonnet 5.5가 thinking 기본 ON이라 max_tokens 2000으론 본문 빈/잘림 위험 — claude-api 스킬로 사양 확인 후 effort low+max_tokens 4096+타임아웃 60초로 수정), MED 5(키 개행 시 로그 노출 경로, 간헐 401=테스트 H2 공유, 확정 레이스, 알람/점검 경로 중복 생성, docs/11 권한표) 수정. 실MySQL+브라우저 라이브 확인은 AI_PROVIDER=mock 기준. **실 Claude 호출은 API 키 없어 미검증**. 리포트: `.claude/_workspace/qa/f6-ai리포트_20261003.md` |

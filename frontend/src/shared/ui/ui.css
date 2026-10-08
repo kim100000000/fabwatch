@@ -24,8 +24,8 @@
 
 .status-badge[data-status='RUN'] { color: var(--status-run); }
 .status-badge[data-status='IDLE'] { color: var(--status-idle); }
-.status-badge[data-status='DOWN'] { color: var(--status-down); }
-.status-badge[data-status='PM'] { color: var(--status-pm); }
+.status-badge[data-status='DOWN'] { color: var(--text-down); }
+.status-badge[data-status='PM'] { color: var(--text-pm); }
 
 /* ---------- SeverityBadge (알람 심각도 3색) ---------- */
 .severity-badge {
@@ -41,7 +41,10 @@
 
 .severity-badge[data-severity='WARNING'] { background: var(--alarm-warning); }
 .severity-badge[data-severity='MAJOR'] { background: var(--alarm-major); }
-.severity-badge[data-severity='CRITICAL'] { background: var(--alarm-critical); }
+.severity-badge[data-severity='CRITICAL'] {
+  background: var(--alarm-critical);
+  color: var(--text-on-critical); /* 위험 배경 위 글자는 흰색 (대비 4.8:1) */
+}
 
 /* ---------- ShiftIndicator (교대 D/N) ---------- */
 .shift-indicator {
@@ -137,6 +140,23 @@
   border-radius: var(--radius);
   background: var(--bg-card);
   text-align: center;
+}
+
+.error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.route-error-card {
+  text-align: center;
+}
+
+.route-error-text {
+  margin: 0 0 20px;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .error-state .error-code {
@@ -304,4 +324,36 @@
 .confirm-message {
   line-height: 1.6;
   white-space: pre-line;
+}
+
+/* ---------- Term (용어 풀이 툴팁) ---------- */
+.term {
+  cursor: help;
+  text-decoration: underline dotted var(--text-secondary);
+  text-underline-offset: 3px;
+}
+
+.term-tip {
+  position: fixed;
+  z-index: 300;
+  width: max-content;
+  max-width: min(260px, calc(100vw - 16px));
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.term-tip[data-open='true'] {
+  visibility: visible;
 }

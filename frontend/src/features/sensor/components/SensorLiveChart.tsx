@@ -12,7 +12,7 @@ import {
 } from 'recharts'
 import { useChartTokens } from '@/shared/lib/cssToken'
 import { formatKstTime } from '@/shared/lib/datetime'
-import { SENSOR_TYPE_LABEL } from '../types'
+import { SENSOR_LEVEL_LABEL, SENSOR_TYPE_LABEL, thresholdLines } from '../types'
 import type { LivePoint, SensorLatest } from '../types'
 import './sensor.css'
 
@@ -26,24 +26,6 @@ interface SensorLiveChartProps {
   headerActions?: ReactNode
 }
 
-/** null/undefined 를 제외한 임계치만 모은다 */
-function thresholdEntries(sensor: SensorLatest): { value: number; kind: 'warn' | 'crit'; label: string }[] {
-  const entries: { value: number; kind: 'warn' | 'crit'; label: string }[] = []
-  if (sensor.warnLow !== null && sensor.warnLow !== undefined) {
-    entries.push({ value: sensor.warnLow, kind: 'warn', label: 'warnLow' })
-  }
-  if (sensor.warnHigh !== null && sensor.warnHigh !== undefined) {
-    entries.push({ value: sensor.warnHigh, kind: 'warn', label: 'warnHigh' })
-  }
-  if (sensor.critLow !== null && sensor.critLow !== undefined) {
-    entries.push({ value: sensor.critLow, kind: 'crit', label: 'critLow' })
-  }
-  if (sensor.critHigh !== null && sensor.critHigh !== undefined) {
-    entries.push({ value: sensor.critHigh, kind: 'crit', label: 'critHigh' })
-  }
-  return entries
-}
-
 /**
  * 센서 실시간 차트 (docs/04 §4 SensorLiveChart, docs/03 F-5.2).
  * - 라인 색 --accent, warn 점선 --alarm-warning, crit 점선 --alarm-critical
@@ -51,7 +33,7 @@ function thresholdEntries(sensor: SensorLatest): { value: number; kind: 'warn' |
  */
 export function SensorLiveChart({ sensor, points, flash = false, headerActions }: SensorLiveChartProps) {
   const tokens = useChartTokens()
-  const thresholds = useMemo(() => thresholdEntries(sensor), [sensor])
+  const thresholds = useMemo(() => thresholdLines(sensor), [sensor])
 
   // 임계치 선이 잘리지 않도록 Y축 범위에 임계치를 포함시킨다.
   const yDomain = useMemo((): [number | 'auto', number | 'auto'] => {
@@ -77,6 +59,11 @@ export function SensorLiveChart({ sensor, points, flash = false, headerActions }
         <span className="sensor-value" data-level={level} data-flash={flash ? 'true' : undefined}>
           {sensor.value === null || sensor.value === undefined ? '-' : sensor.value.toFixed(1)}
           <span className="sensor-unit">{unit}</span>
+          {level !== 'NORMAL' && (
+            <span className="level-mark" data-level={level}>
+              {SENSOR_LEVEL_LABEL[level]}
+            </span>
+          )}
         </span>
       </div>
 
@@ -84,7 +71,7 @@ export function SensorLiveChart({ sensor, points, flash = false, headerActions }
         <div className="sensor-chart-sub">
           <div className="sensor-threshold-legend">
             {thresholds.map((item) => (
-              <span key={item.label} className={item.kind}>
+              <span key={item.key} className={item.kind}>
                 {item.label} {item.value}
               </span>
             ))}
@@ -135,7 +122,7 @@ export function SensorLiveChart({ sensor, points, flash = false, headerActions }
               />
               {thresholds.map((item) => (
                 <ReferenceLine
-                  key={item.label}
+                  key={item.key}
                   y={item.value}
                   stroke={item.kind === 'warn' ? tokens.warning : tokens.critical}
                   strokeDasharray="5 4"

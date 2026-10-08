@@ -6,7 +6,7 @@ import { toApiError } from '@/shared/api'
 import { toUserMessage } from '@/shared/lib/errorMessage'
 import { ackAlarm } from '../api/alarmApi'
 import { useAlarmList } from '../api/useAlarmList'
-import { compareAlarms } from '../types'
+import { compareAlarms, inspectionRegisterPath } from '../types'
 import type { Alarm } from '../types'
 import { AlarmTable } from './AlarmTable'
 import { AlarmResolveDialog } from './AlarmResolveDialog'
@@ -69,6 +69,7 @@ export function EquipmentAlarmTabPanel({ equipmentId, renderExtraActions }: Equi
           onAck={(alarm) => void handleAck(alarm)}
           onResolveRequest={setResolveTarget}
           onOpenInspection={(inspectionId) => navigate(`/inspections?id=${inspectionId}`)}
+          onRegisterInspection={(alarm) => navigate(inspectionRegisterPath(alarm))}
           renderExtraActions={renderExtraActions}
         />
       )}

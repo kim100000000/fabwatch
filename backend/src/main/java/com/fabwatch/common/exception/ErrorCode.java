@@ -19,6 +19,12 @@ public enum ErrorCode {
     UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "지원하지 않는 요청 형식입니다. Content-Type을 확인하세요."),
     NOT_ACCEPTABLE(HttpStatus.NOT_ACCEPTABLE, "지원하지 않는 응답 형식입니다."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다."),
+    /** 중복·참조 무결성 등 DB 제약 충돌. 제약명·SQL은 노출하지 않는다. */
+    CONFLICT(HttpStatus.CONFLICT, "요청이 현재 데이터 상태와 충돌합니다. 중복되었거나 다른 데이터가 참조 중일 수 있습니다."),
+    /** 로그인/리프레시 IP 레이트 리밋, SSE 동시 연결 한도 초과 */
+    RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "요청이 너무 많습니다. 잠시 후 다시 시도하세요."),
+    /** 요청 본문 크기 상한 초과 (기본 1MB) */
+    PAYLOAD_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "요청 본문이 너무 큽니다."),
 
     // 인증 (docs/03 F-1, docs/06 §1)
     LOGIN_FAILED(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),

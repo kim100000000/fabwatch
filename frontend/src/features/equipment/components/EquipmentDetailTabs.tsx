@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { SensorTabPanel } from '@/features/sensor'
+import type { SensorFeed } from '@/features/sensor'
 import { EquipmentAlarmTabPanel } from '@/features/alarm'
 import { EquipmentInspectionTabPanel } from '@/features/inspection'
 import { AlarmReportButton, EquipmentReportTabPanel, InspectionReportButton } from '@/features/aireport'
 import { EquipmentStatusLogTable } from './EquipmentStatusLogTable'
-import type { EquipmentSensor } from '../types'
 import './equipment.css'
 
 /** S-3 탭 구성 (docs/04 §3) + 상태 이력(F-2 상태 로그) */
@@ -20,8 +20,8 @@ type TabKey = (typeof TABS)[number]['key']
 
 interface EquipmentDetailTabsProps {
   equipmentId: number
-  /** GET /equipments/{id} 가 준 센서 정보 (임계치·단위 출처) — 센서 탭에서 사용 */
-  sensors?: EquipmentSensor[]
+  /** 페이지 수준에서 연 실시간 스트림 피드 (센서 탭이 구독) */
+  sensorFeed: SensorFeed
   /** 상태 변경 직후 상태 이력 탭을 다시 읽게 하는 키 */
   statusLogReloadKey?: number
 }
@@ -33,7 +33,7 @@ interface EquipmentDetailTabsProps {
  */
 export function EquipmentDetailTabs({
   equipmentId,
-  sensors,
+  sensorFeed,
   statusLogReloadKey = 0,
 }: EquipmentDetailTabsProps) {
   const [active, setActive] = useState<TabKey>('sensor')
@@ -56,7 +56,7 @@ export function EquipmentDetailTabs({
       </div>
 
       <div className="tab-panel" role="tabpanel">
-        {active === 'sensor' && <SensorTabPanel equipmentId={equipmentId} sensors={sensors} />}
+        {active === 'sensor' && <SensorTabPanel equipmentId={equipmentId} feed={sensorFeed} />}
         {active === 'inspection' && (
           <EquipmentInspectionTabPanel
             equipmentId={equipmentId}
@@ -68,7 +68,12 @@ export function EquipmentDetailTabs({
         {active === 'alarm' && (
           <EquipmentAlarmTabPanel
             equipmentId={equipmentId}
-            renderExtraActions={(alarm) => <AlarmReportButton alarmId={alarm.id} />}
+            // AI 리포트는 센서/수동 알람의 미해결 건에만 — PM 지연·해제 완료 알람에는 숨긴다
+            renderExtraActions={(alarm) =>
+              alarm.alarmType !== 'PM_OVERDUE' && alarm.status !== 'RESOLVED' ? (
+                <AlarmReportButton alarmId={alarm.id} />
+              ) : null
+            }
           />
         )}
         {active === 'statusLog' && (

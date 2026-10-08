@@ -28,19 +28,24 @@ export function useSensorHistory(
 ): SensorHistoryResult {
   const enabled = equipmentId !== null && sensorType !== null
 
+  // 센서/기간이 바뀌면 이전 조건의 응답은 쓰지 않는다 — 응답에 요청 키를 실어 현재 키와 같을 때만 사용한다
+  const requestKey = `${equipmentId}:${sensorType}:${range}`
+
   const fetcher = useCallback(
-    (signal: AbortSignal) => {
+    async (signal: AbortSignal) => {
       const minutes = HISTORY_RANGES.find((item) => item.key === range)?.minutes ?? 60
-      return fetchSensorSeries(
+      const response = await fetchSensorSeries(
         equipmentId!,
         { sensorType: sensorType!, from: minutesAgoIso(minutes), to: new Date().toISOString() },
         signal,
       )
+      return { key: requestKey, response }
     },
-    [equipmentId, sensorType, range],
+    [equipmentId, sensorType, range, requestKey],
   )
 
-  const { data, loading, error, refetch } = useApiQuery(fetcher, { enabled })
+  const { data: keyed, loading, error, refetch } = useApiQuery(fetcher, { enabled })
+  const data = keyed && keyed.key === requestKey ? keyed.response : null
 
   // sensorType 을 지정해 조회하므로 series 는 보통 1개지만, 방어적으로 타입이 맞는 것을 고른다.
   const series =
@@ -49,7 +54,8 @@ export function useSensorHistory(
   return {
     points: series?.points ?? [],
     granularity: data?.granularity ?? null,
-    loading,
+    // 현재 조건의 응답이 아직 없으면(전환 직후 포함) 로딩으로 취급한다
+    loading: enabled && !error && (loading || data === null),
     error,
     refetch,
   }

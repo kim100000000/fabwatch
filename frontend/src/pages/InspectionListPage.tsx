@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/shared/hooks/usePageTitle'
 import { useCallback, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/app/providers/useAuth'
@@ -23,6 +24,7 @@ import { EmptyState, ErrorState, LoadingBlock, Pagination } from '@/shared/ui'
  * - S-5 저장 후 이동하면 location.state.notice 를 성공 배너로 보여준다
  */
 export function InspectionListPage() {
+  usePageTitle('점검 이력')
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
+import { ErrorBoundary } from '@/shared/ui'
 import { Header } from './Header'
 import type { AppOutletContext } from './outletContext'
 import { Sidebar } from './Sidebar'
@@ -11,13 +12,20 @@ import './layout.css'
  */
 export function AppLayout() {
   const [lineId, setLineId] = useState<number | null>(null)
+  const location = useLocation()
 
   return (
     <div className="app-shell">
+      <a href="#main-content" className="skip-link">
+        본문으로 건너뛰기
+      </a>
       <Header lineId={lineId} onLineChange={setLineId} />
       <Sidebar />
-      <main className="app-main">
-        <Outlet context={{ lineId } satisfies AppOutletContext} />
+      <main className="app-main" id="main-content" tabIndex={-1}>
+        {/* 본문에서 난 렌더 예외가 사이드바·헤더까지 날리지 않게 격리 — 라우트가 바뀌면 자동 해제 */}
+        <ErrorBoundary resetKey={location.pathname}>
+          <Outlet context={{ lineId } satisfies AppOutletContext} />
+        </ErrorBoundary>
       </main>
     </div>
   )
