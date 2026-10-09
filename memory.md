@@ -50,7 +50,7 @@ docs/06_API명세서.md               ← REST + SSE 전체 엔드포인트
 docs/07_개발로드맵.md              ← 4주 계획 + 버퍼 규칙 + 취업 병행 일정
 docs/08_수익화전략.md              ← SaaS/템플릿/콘텐츠 3트랙 (실행은 취업 후)
 docs/09_체크리스트.md              ← 완성형 체크리스트 ★작업 완료 시마다 체크
-docs/10_아키텍처결정기록_면접대비.md ← ADR 10건 + 면접 답변집 (새 결정 시 ADR 추가)
+docs/10_아키텍처결정기록_면접대비.md ← ADR 11건 + 면접 답변집 (새 결정 시 ADR 추가)
 docs/11_보안명세서.md              ← 인증/인가/OWASP/시크릿/AI 보안
 docs/12_테스트계획서.md            ← 단위/통합/E2E 전략, 4대 핵심 도메인 테스트 케이스
 docs/13_배포운영명세서.md          ← Railway/Vercel 배포, 환경변수, 스케줄러, 장애 대응
@@ -116,6 +116,15 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 - **프론트**: 401 후 재시도 실패를 세션 만료로 오인하던 버그 수정(리프레시 거부 시에만 로그아웃), 설비 목록 미해결 알람 0 오류 수정(알람 API 집계), 전역 ErrorBoundary/errorElement, 폴링 폴백 stale 덮어쓰기 수정, vercel.json SPA rewrites, 운영 빌드의 localhost 폴백 제거, 로그인 화면(데모 계정 버튼은 `VITE_DEMO_LOGIN`일 때만, 내부 문서 번호 제거), /admin ADMIN 한정, 대시보드 정렬·'조치 필요' 요약, 알람 센터(기본 미해결·점검 등록 바로가기 alarmId), 임계치 한글 라벨, 차트 5분 프리로드, 용어 툴팁(glossary), 390px 헤더, 접근성(글자용 색 토큰·포커스·reduced-motion·skip link·page title), SSE 20초 무수신 시 폴링 보강.
 - 점검 원문: 보안 `.claude/_workspace/review/security_20261006.md`(나머지 3개는 파일 저장 안 됨, 위 요약이 전부).
 
+### 설비 배치도(Floor Map) 뷰 — 2026-10-09 (프론트 단독, 백엔드 변경 없음)
+- [x] **S-1 대시보드에 배치도/카드 토글**(기본 배치도): 공정 순서(GET /lines seq) 자동 배치 SVG, 설비 4종 가상 일반형(LAMI/OVEN/SCRB/AOI + 범용 폴백), 컨베이어 흐름(양쪽 RUN일 때만), 센서 4종→파트 4슬롯(TEMP 히터/VIBRATION 모터/PRESSURE 진공·에어/CURRENT 전장), 호버·포커스 툴팁, 클릭 시 `/equipment/:id`
+- [x] **확정 결정**: 상태 4개 유지·PD 제외(ADR-11, 필요 시 DOWN 유형 `down_type`으로 확장). 본체 색 RUN 초록/IDLE 노랑/PM 회색/DOWN(BM) 빨강 — `--status-idle` #FACC15, `--status-pm` #94A3B8로 토큰 변경(비상태 용도는 `--neutral`/`--pm-task`/`--text-pm-task`로 분리). 알람은 본체색 불변, 외곽 링(WARNING 점선·MAJOR 실선 두 겹·CRITICAL 굵은 두 겹 깜빡임)+건수 뱃지, OPEN=깜빡임/ACK=정지. **PM_OVERDUE 알람은 링·건수에서 제외**(PM 지연은 전용 뱃지 — 시연 때 경고→위험 링 변화가 안 가려지게). PM 지연 색은 전 화면 파랑(`--pm-task`)으로 통일(카드 뷰 빨강 → 파랑)
+- [x] **끊김(stale) 판정**: 클라이언트 수신 시각 기준 15초(서버 measuredAt과 브라우저 시계 비교 안 함 — 시계 오차 오탐 방지, QA M-1)
+- [x] **기존 버그 수정**: DashboardPage `scheduleServerRefresh`가 연속 이벤트에서 알람 재조회를 덮어써 데모 핵심 순간(알람 직후 자동 DOWN)에 링이 최대 30초 낡던 문제 → 대기 요청 OR 병합. 폴링 폴백에서도 알람 요약 reload
+- [x] **QA**: HIGH 0 / MED 5(M-1 시계 오차, M-2 PM 지연 색 불일치, M-3 집계 실패 구분, M-4 알람 집계 테스트, M-5 흐림 시 라벨 대비) + LOW 일부 수정, 합의 결정 위반 0. 프론트 테스트 61→103(이후 패널 개편 포함 117), build/lint 통과. 라이브(DRIFT): 경고 ~40초 점선 주황 링 → ~107초 모터 파트 빨강+DOWN(BM)+위험 링. 리포트 `.claude/_workspace/qa/floormap_20261009.md`, 스크린샷 `docs/screenshots/06_floormap_*.png` 5장
+- [x] **데모 제어 패널 개편** (사용자 지적: 패널이 커서 배치도를 가림, '주입'이 10분짜리라 시연 때 변화 없음): 폭 280px 컴팩트, 헤더 드래그/방향키 이동(뷰포트 clamp·위치 localStorage 저장·Home/↺ 초기화), 주 버튼 '데모 자동 시작(약 2분)' + 접이식 '수동 주입(고급)'(DRIFT 지속시간 2/5/10분, 기본 2분), 설비에 있는 센서만 선택 가능. 프론트 테스트 103→**117**. 시연 확인: 데모 자동 시작 → 약 46초 점선 링+모터 경고 파트 → 약 117초 DOWN(BM)+위험 링+컨베이어 정지
+- [ ] 이월(LOW): 알람 링 무기한 깜빡임 일시정지 수단 없음(reduced-motion만), MAJOR 링은 수동 MAJOR 알람 때만 도달, `useProcessSeq`의 `GET /lines` 중복 호출, 집계 truncated 무시, FloorMapUnit memo 없음(100대 규모 시), 재조회 max-wait 없음/진행 중 응답이 statusOverride를 비워 잠깐 깜빡일 수 있음, 컴포넌트(tsx) 테스트 설정 없음(vitest가 .test.ts만), 알람 센터 외 화면의 IDLE 노랑 대비 점검, README 스크린샷에 배치도 반영 여부
+
 ### 남음
 - [ ] **실 Claude API 호출 검증** (ANTHROPIC_API_KEY 필요, `AI_PROVIDER=claude`): 응답 형식·토큰·지연(60초 내)·effort low 품질. yml 기본값 정정 후 처음으로 실제 4096/60이 적용됨.
 - [ ] **배포 준비**(AWS 단일 EC2+docker compose 방향으로 논의됨, 지원 시작 시점에 가입 권장 — Free 플랜 $200·6개월, 자동 청구 없음, Budgets 알림): ① **Flyway V1__init.sql**(prod ddl-auto=validate라 refresh_tokens·신규 인덱스 4개 포함해 스키마를 만들어야 함; docs/13에 refresh_tokens DDL 있음) ② **운영 ADMIN 부트스트랩**(환경변수, users 비었을 때만; 운영에서 시드·fabwatch123 금지) ③ `spring.profiles.default: local` 제거 ④ jar에 application-local.yml 포함 문제(.dockerignore/빌드 제외) ⑤ 다단계 Dockerfile(비루트)·docker-compose.prod·nginx/Caddy(SSE 프록시 버퍼링 off, 보안 헤더/CSP) ⑥ `server.forward-headers-strategy=framework`(레이트 리밋 IP), CORS `Access-Control-Expose-Headers: Retry-After` ⑦ JWT_SECRET 필수 고정
@@ -126,7 +135,7 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 ## 5. 다음 작업 지시 (그대로 실행 가능)
 
 ```
-다음: 배포 준비(위 '남음' 참고) — 코드 기능 개발과 배포 전 점검 수정은 끝남. 사용자가 배포 시점을 정하면 Flyway/부트스트랩/Dockerfile부터. 실 Claude 호출은 키 준비 시 최우선 검증.
+다음: 배포 준비(위 '남음' 참고) — 코드 기능 개발과 배포 전 점검 수정, 설비 배치도 뷰는 끝남(배치도·데모 패널 develop에 커밋 완료, main 머지는 하지 않음). 사용자가 배포 시점을 정하면 Flyway/부트스트랩/Dockerfile부터. 실 Claude 호출은 키 준비 시 최우선 검증.
 
 기술 부채·후속(우선순위 낮음):
    - react-router-dom 7 업그레이드(moderate 취약점 2건, major라 미적용), 번들 937kB(EquipmentDetailPage·ReportDetailPage lazy 분할 + 공용 CSS를 shared로 이전해야 가능), FSD 개편(EquipmentDetailTabs가 4개 feature를 런타임 import, features→app useAuth 9곳)
@@ -173,6 +182,7 @@ F-3 이월/후속 (우선순위 순):
 
 | 날짜 | 작업 | 결과/결정 |
 |---|---|---|
+| 2026-10-09 | **설비 배치도(Floor Map) 뷰** (하네스: frontend-dev → mes-qa → 수정 재투입, 백엔드 변경 없음) | 상태 4색(RUN 초록/IDLE 노랑/PM 회색/DOWN 빨강)+알람 링/뱃지+센서 이상 파트 강조+수신 끊김, 공정 순서 자동 배치 SVG, 대시보드 배치도/카드 토글. PD는 상태 대신 DOWN 유형 확장 지점으로 남기고 제외(ADR-11). PM_OVERDUE는 링·건수 제외, PM 지연 색 파랑 통일, 끊김은 수신 시각 기준. 기존 scheduleServerRefresh 덮어쓰기 버그 수정. QA HIGH 0/MED 5 수정, 프론트 테스트 61→103. 실MySQL DRIFT 라이브 확인(경고 ~40초→DOWN ~107초). 리포트 `.claude/_workspace/qa/floormap_20261009.md`. 데모 제어 패널도 컴팩트·드래그 이동으로 개편(테스트 117). develop에 커밋 |
 | 2026-10-08 | **배포 전 점검 수정 완료·통합 검증** (리뷰 4종 → 수정 3묶음 병렬: 백엔드 보안 / 백엔드 안정성 / 프론트) | 보안 HIGH 3·백엔드 HIGH 3·프론트 HIGH 5·UI/UX HIGH 5 중 배포 비종속 항목 전부 수정(refresh 비인증 로그아웃 차단·다중 세션 해시, 레이트 리밋/본문/SSE 상한, 수집 틱 분리·삭제 배치 청크화·설비 락·시나리오 만료, 프론트 오인 로그아웃·미해결 알람 0·ErrorBoundary·로그인/대시보드/알람센터 UX·접근성). 테스트 백엔드 578·프론트 61(vitest 신규). 실서버 확인: 위조 refresh 401, 2기기 동시 refresh 200/200, 해시 저장, 413, 400(sort/40일 조회), 로그인 타이밍 평준화, 레이트 리밋 429, 데모 경고~50초→자동 DOWN 104초. 에이전트 한도 오류로 중단된 작업은 SendMessage로 재개해 완료. 배포 종속 항목(Flyway·ADMIN 부트스트랩·프로파일·Dockerfile)과 실 Claude 호출 검증은 남음 |
 | 2026-10-06 | **개발 마무리: 설비 상세 헤더·임계치 편집 화면·작업자 필터 + 최종 점검** (하네스: backend/frontend 병렬 → mes-qa → 수정 → 라이브 검증) | FR-2.3/2.4/3.5 완료(체크리스트 Must 미완 항목 해소), /users/lookup, 405·415·406 핸들러, 임계치 자릿수·전부 비우기 차단, Modal 접근성. 최종 점검: 에러 포맷 전 경로 통일, 비밀키 clean, NFR-1 실측 32ms. QA에서 범위 밖 X-1 발견(yml이 AI 기본값 덮어씀 → F-6 수정 무효였음)→정정·바인딩 테스트. 테스트 411→434. 에이전트가 만든 임계치 테스트 이력 4건은 권한 규칙으로 삭제 못 해 남아 있음(사용자 정리 필요) |
 | 2026-10-03 | **4주차 KPI + 시뮬레이터 개선 + README/스크린샷** (하네스: backend/frontend 병렬 → mes-qa → 수정 → 라이브 검증) | KPI(가동률/MTBF/MTTR, KST 절삭·합산 재계산)·설비 상세/대시보드 위젯, DRIFT plateau(crit+1σ)+데모 2분(실측 경고 52초→자동 DOWN 100~109초). 테스트 365→411. QA HIGH 0, MED 3 수정, 손계산 3건 실DB 일치. 라이브에서 확인: 숨김 탭은 폴링 중지(설계), 세션은 curl 로그인이 refresh token을 교체해 브라우저 세션을 끊을 수 있음(사용자당 1개 저장). README.md+스크린샷 5장 작성. 데모 환경 정리 후 커밋. 배포·이력서 3줄·실Claude 호출 검증은 남음 |
