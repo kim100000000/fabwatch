@@ -47,4 +47,5 @@ export type {
   AlarmResolveRequest,
   ManualAlarmRequest,
   OpenAlarmSummary,
+  OpenAlarmEquipmentSummary,
 } from './types'

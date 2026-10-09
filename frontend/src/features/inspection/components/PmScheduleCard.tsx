@@ -26,7 +26,7 @@ const CYCLE_TYPES: PmCycleType[] = ['DAILY', 'WEEKLY', 'MONTHLY']
 
 /**
  * S-3 점검 탭 PM 스케줄 카드 (docs/04 §3 탭2, docs/03 3.3).
- * 주기 / 마지막 완료 / 다음 예정일을 보여주고, OVERDUE 면 빨강 + 경과일.
+ * 주기 / 마지막 완료 / 다음 예정일을 보여주고, OVERDUE 면 PM 파랑(--pm-task) 강조 + 경과일.
  * 주기 설정·변경 폼은 ENGINEER+ 만 (PUT /equipments/{id}/pm-schedule — 서버가 nextDueAt 재계산).
  */
 export function PmScheduleCard({ equipmentId, schedule, loading = false, failed = false, onSaved }: PmScheduleCardProps) {

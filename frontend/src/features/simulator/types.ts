@@ -29,6 +29,8 @@ export interface Scenario {
   type: ScenarioType
   param?: ScenarioParam | null
   startedAt?: string | null
+  /** 서버가 자동 만료/해제된 시나리오도 이력으로 돌려줄 수 있어, false 는 활성 목록에서 뺀다 */
+  active?: boolean
 }
 
 /** POST /simulator/scenarios 요청 */
@@ -45,10 +47,4 @@ export const DEFAULT_SCENARIO_PARAM: Record<ScenarioType, ScenarioParam> = {
   DRIFT: { durationMin: 10 },
   SPIKE: { probability: 0.1, multiplier: 1.8 },
   STEP: { offsetRatio: 0.15 },
-}
-
-export const SCENARIO_TYPE_HINT: Record<ScenarioType, string> = {
-  DRIFT: '기울기 상승 — 지정 시간에 걸쳐 crit 도달',
-  SPIKE: '확률적 급등 — 순간 이상치',
-  STEP: '기준선 이동 — 부품 교체 후 틀어짐 재현',
 }

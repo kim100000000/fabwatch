@@ -64,7 +64,7 @@ export function EquipmentInfoPanel({ equipment, summary }: EquipmentInfoPanelPro
             if (!pm) return <span className="info-value-muted">미설정</span>
             if (!pm.overdue) return formatKstDate(pm.nextDueAt)
             return (
-              <span className="info-value-danger">
+              <span className="info-value-pm">
                 {formatKstDate(pm.nextDueAt)} · {pm.overdueDays > 0 ? `${pm.overdueDays}일 경과` : 'OVERDUE'}
               </span>
             )

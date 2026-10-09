@@ -15,6 +15,7 @@ export { useEquipmentStatusLogs } from './api/useEquipmentStatusLogs'
 export { useLineTree } from './api/useLineTree'
 export { useEquipmentKpi } from './api/useEquipmentKpi'
 export { useLineKpi } from './api/useLineKpi'
+export { useProcessSeq } from './api/useProcessSeq'
 export { EquipmentTable } from './components/EquipmentTable'
 export { EquipmentCardGrid } from './components/EquipmentCardGrid'
 export { EquipmentStatusFilter } from './components/EquipmentStatusFilter'
@@ -25,6 +26,9 @@ export { EquipmentStatusDialog } from './components/EquipmentStatusDialog'
 export { EquipmentKpiCard } from './components/EquipmentKpiCard'
 export { LineKpiSection } from './components/LineKpiSection'
 export { EquipmentStatusLogTable } from './components/EquipmentStatusLogTable'
+export { FloorMap } from './components/FloorMap'
+export type { FloorMapProps } from './components/FloorMap'
+export type { FloorMapSensor, FloorMapAlarm, FloorMapAlarmSummary } from './floorMap'
 export {
   EQUIPMENT_STATUSES,
   ALLOWED_STATUS_TRANSITIONS,

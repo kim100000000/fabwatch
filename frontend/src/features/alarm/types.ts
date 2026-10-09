@@ -183,12 +183,27 @@ export function linkedInspectionId(resolveNote: string | null | undefined): numb
   return match ? Number(match[1]) : null
 }
 
+/** 설비 1대의 미해결 알람 집계 (count/openCount/maxSeverity 는 PM_OVERDUE 포함 전체 기준) */
+export interface OpenAlarmEquipmentSummary {
+  count: number
+  openCount: number
+  maxSeverity: AlarmSeverity
+  /** 그중 PM_OVERDUE(PM 지연) 알람 건수 / OPEN 건수 — 배치도는 PM 지연을 링이 아니라 전용 뱃지로 보여 준다 */
+  pmOverdueCount: number
+  pmOverdueOpenCount: number
+  /** PM_OVERDUE 를 뺀 알람(센서·수동)의 최고 심각도. 그런 알람이 없으면 null */
+  nonPmMaxSeverity: AlarmSeverity | null
+}
+
 /** 설비별 미해결(OPEN+ACK) 알람 집계 — 설비 목록/대시보드의 알람 건수·정렬에 쓴다 */
 export interface OpenAlarmSummary {
   /** 전체 미해결 알람 건수 */
   total: number
-  /** equipmentId → 건수 / 최고 심각도 (미해결이 없는 설비는 키가 없다) */
-  byEquipment: Record<number, { count: number; maxSeverity: AlarmSeverity }>
+  /**
+   * equipmentId → 건수 / 최고 심각도 (미해결이 없는 설비는 키가 없다).
+   * openCount 는 그중 아직 확인(ACK) 안 된 OPEN 건수 — 배치도가 깜빡임(OPEN)/정지(ACK)를 가르는 데 쓴다.
+   */
+  byEquipment: Record<number, OpenAlarmEquipmentSummary>
   /** 조회 상한(상태당 2,000건)에 걸려 집계가 잘렸는지 */
   truncated: boolean
 }

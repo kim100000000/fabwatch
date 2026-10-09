@@ -35,7 +35,7 @@
   font-weight: 700;
 }
 
-.kpi-item[data-pm-overdue='true'] { border-top-color: var(--status-pm); }
+.kpi-item[data-pm-overdue='true'] { border-top-color: var(--pm-task); }
 
 /* 조치 필요 요약 줄 */
 .attention-banner {
@@ -69,4 +69,51 @@
   margin: 0 0 16px;
   color: var(--text-secondary);
   font-size: 12px;
+}
+
+/* 설비 현황 보기 전환 (배치도 / 카드) */
+.dash-view-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.dash-view-toggle-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.dash-view-toggle-buttons {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.dash-view-toggle-btn {
+  min-height: 32px;
+  padding: 4px 16px;
+  border: none;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.dash-view-toggle-btn + .dash-view-toggle-btn {
+  border-left: 1px solid var(--border);
+}
+
+.dash-view-toggle-btn:hover {
+  background: var(--bg-hover);
+}
+
+/* 선택 상태는 색뿐 아니라 굵기·밑줄로도 구분한다 */
+.dash-view-toggle-btn[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--bg-base);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }

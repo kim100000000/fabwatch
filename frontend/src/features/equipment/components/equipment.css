@@ -311,3 +311,5 @@
 .detail-info .info-value-muted { color: var(--text-secondary); }
 .detail-info .info-value-alert { color: var(--alarm-major); font-weight: 600; }
 .detail-info .info-value-danger { color: var(--text-down); font-weight: 600; }
+/* PM 지연은 빨강(DOWN 과 혼동) 대신 PM 파랑 */
+.detail-info .info-value-pm { color: var(--text-pm-task); font-weight: 600; }

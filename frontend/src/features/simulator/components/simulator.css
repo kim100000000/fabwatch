@@ -1,16 +1,17 @@
-/* 데모 컨트롤 패널 (S-1 우하단 플로팅) — 색상은 전역 토큰만 사용 */
+/* 데모 컨트롤 패널 (S-1 우하단 플로팅, 컴팩트) — 색상은 전역 토큰만 사용 */
 
 .demo-fab {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
+  right: 16px;
+  bottom: 16px;
   z-index: 40;
-  min-height: 44px;
-  padding: 0 16px;
+  min-height: 36px;
+  padding: 0 14px;
   border: 1px solid var(--accent);
   border-radius: 999px;
   background: var(--bg-card);
   color: var(--accent);
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -20,45 +21,113 @@
 
 .demo-panel {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
+  right: 16px;
+  bottom: 16px;
   z-index: 40;
-  width: 320px;
-  max-height: 70vh;
+  width: 280px;
+  max-width: calc(100vw - 16px);
+  max-height: min(80vh, 520px);
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-card);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
 }
 
+.demo-panel[data-dragging='true'] {
+  border-color: var(--accent);
+  user-select: none;
+}
+
+/* 헤더 = 드래그 핸들 (마우스/터치/방향키) */
 .demo-panel-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 12px 14px;
+  gap: 6px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--border);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.demo-panel[data-dragging='true'] .demo-panel-head {
+  cursor: grabbing;
+}
+
+.demo-panel-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.demo-grip {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.demo-title {
+  flex: 1;
+  font-size: 13px;
+}
+
+.demo-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.demo-icon-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.demo-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .demo-panel-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px;
+  gap: 6px;
+  padding: 8px 10px 10px;
   overflow-y: auto;
 }
 
-.demo-actions {
-  display: flex;
-  gap: 8px;
+/* 주 버튼 */
+.demo-primary {
+  width: 100%;
+  min-height: 44px;
+  font-size: 14px;
+}
+
+.demo-hint {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.demo-error {
+  margin: 0;
+  font-size: 11px;
 }
 
 .demo-scenario-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-top: 8px;
+  gap: 3px;
+  padding-top: 4px;
   border-top: 1px solid var(--border);
 }
 
@@ -67,13 +136,77 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  font-size: 11px;
+}
+
+.demo-link-btn {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 11px;
+}
+
+.demo-link-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+/* 수동 주입(고급) 접이식 */
+.demo-advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0 0;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: left;
+}
+
+.demo-advanced-toggle:hover {
+  color: var(--text-primary);
+}
+
+.demo-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.demo-field {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.demo-field label {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.demo-field select {
+  min-height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.demo-inject {
+  min-height: 32px;
   font-size: 12px;
 }
 
 @media (max-width: 1024px) {
-  .demo-panel {
+  .demo-panel,
+  .demo-fab {
     right: 12px;
-    left: 12px;
-    width: auto;
+    bottom: 12px;
   }
 }

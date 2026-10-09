@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import type { AppOutletContext } from '@/app/layouts/outletContext'
 import { useAuth } from '@/app/providers/useAuth'
-import { EQUIPMENT_STATUSES, LineKpiSection, useEquipmentList } from '@/features/equipment'
+import { EQUIPMENT_STATUSES, FloorMap, LineKpiSection, useEquipmentList, useProcessSeq } from '@/features/equipment'
 import type { EquipmentStatus, EquipmentSummary } from '@/features/equipment'
 import {
   AlarmStreamList,
@@ -24,6 +24,19 @@ import './dashboard.css'
 
 /** 스트림에 유지할 최근 알람 건수 (docs/03 F-5.1) */
 const ALARM_STREAM_SIZE = 10
+
+/** 보기 전환 선택 보관 키 (사용자 편의용 — 저장 실패해도 동작에는 영향 없음) */
+const VIEW_STORAGE_KEY = 'fabwatch.dashboard.view'
+
+type DashboardView = 'map' | 'card'
+
+function readStoredView(): DashboardView {
+  try {
+    return window.localStorage.getItem(VIEW_STORAGE_KEY) === 'card' ? 'card' : 'map'
+  } catch {
+    return 'map'
+  }
+}
 
 /** 실시간 이벤트 직후 서버 재조회까지 기다리는 시간 — 연속 이벤트를 한 번의 재조회로 묶는다 */
 const REFETCH_DEBOUNCE_MS = 600
@@ -55,6 +68,19 @@ export function DashboardPage() {
     refetch: refetchEquipments,
   } = useEquipmentList({ size: 100 })
 
+  // 배치도(기본) / 카드 보기 전환
+  const [view, setView] = useState<DashboardView>(readStoredView)
+  const changeView = useCallback((next: DashboardView) => {
+    setView(next)
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, next)
+    } catch {
+      // 저장 불가 환경(프라이빗 모드 등)에서는 이번 세션 선택만 유지한다
+    }
+  }, [])
+  // 배치도의 공정 순서 — 기존 GET /lines 의 공정 seq 재사용
+  const processSeq = useProcessSeq()
+
   // SSE status 이벤트로 갱신된 설비 상태 — 서버 재조회 결과가 도착하면 비운다(서버값이 항상 우선)
   const [statusOverride, setStatusOverride] = useState<Record<number, EquipmentStatus>>({})
   useEffect(() => {
@@ -85,7 +111,7 @@ export function DashboardPage() {
   )
 
   const equipmentIds = useMemo(() => equipments.map((item) => item.id), [equipments])
-  const { sensorsByEquipment, reload: reloadSensors, applySensorEvent } =
+  const { sensorsByEquipment, lastReceivedAt, reload: reloadSensors, applySensorEvent } =
     useLatestSensors(equipmentIds)
 
   // 최근 알람 스트림용 목록
@@ -102,6 +128,7 @@ export function DashboardPage() {
   const [flashSensorIds, setFlashSensorIds] = useState<ReadonlySet<number>>(new Set())
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingRefreshRef = useRef({ equipments: false, alarms: false })
 
   useEffect(
     () => () => {
@@ -118,10 +145,18 @@ export function DashboardPage() {
   /** 실시간 이벤트 뒤 서버 값을 다시 읽는다 — 연속 이벤트는 한 번으로 묶는다 */
   const scheduleServerRefresh = useCallback(
     (what: { equipments?: boolean; alarms?: boolean }) => {
+      // 대기 중인 요청은 합쳐서 보존한다 — 알람 직후 자동 DOWN(status) 이벤트가 오면 앞선 알람 재조회가
+      // 덮어써져 사라지던 문제(배치도 링/뱃지가 30초 폴링까지 낡은 값으로 남음)를 막는다
+      pendingRefreshRef.current = {
+        equipments: pendingRefreshRef.current.equipments || !!what.equipments,
+        alarms: pendingRefreshRef.current.alarms || !!what.alarms,
+      }
       if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current)
       refetchTimerRef.current = setTimeout(() => {
-        if (what.equipments) refetchEquipments()
-        if (what.alarms) {
+        const pending = pendingRefreshRef.current
+        pendingRefreshRef.current = { equipments: false, alarms: false }
+        if (pending.equipments) refetchEquipments()
+        if (pending.alarms) {
           setAlarmReloadKey((key) => key + 1)
           alarmSummary.reload()
         }
@@ -171,6 +206,7 @@ export function DashboardPage() {
     onPoll: async (signal) => {
       await reloadSensors(signal)
       setAlarmReloadKey((key) => key + 1)
+      alarmSummary.reload() // 폴백 중에는 알람 이벤트가 안 오므로 배치도 링용 집계도 함께 갱신한다
       refetchEquipments()
     },
   })
@@ -292,6 +328,42 @@ export function DashboardPage() {
       )}
 
       {sortedEquipments.length > 0 && (
+        <div className="dash-view-toggle" role="group" aria-label="설비 보기 방식">
+          <span className="dash-view-toggle-title">설비 현황</span>
+          <div className="dash-view-toggle-buttons">
+            <button
+              type="button"
+              className="dash-view-toggle-btn"
+              aria-pressed={view === 'map'}
+              onClick={() => changeView('map')}
+            >
+              배치도
+            </button>
+            <button
+              type="button"
+              className="dash-view-toggle-btn"
+              aria-pressed={view === 'card'}
+              onClick={() => changeView('card')}
+            >
+              카드
+            </button>
+          </div>
+        </div>
+      )}
+
+      {sortedEquipments.length > 0 && view === 'map' && (
+        <FloorMap
+          equipments={visibleEquipments}
+          sensorsByEquipment={sensorsByEquipment}
+          alarms={alarmSummary.summary ? alarmSummary.summary.byEquipment : null}
+          alarmFailed={!!alarmSummary.error}
+          lastReceivedAt={lastReceivedAt}
+          processSeq={processSeq}
+          onSelect={(id) => navigate(`/equipment/${id}`)}
+        />
+      )}
+
+      {sortedEquipments.length > 0 && view === 'card' && (
         <div className="live-grid">
           {sortedEquipments.map((equipment) => (
             <EquipmentLiveCard

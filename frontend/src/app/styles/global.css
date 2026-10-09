@@ -17,9 +17,13 @@
 
   /* 설비 상태 (현장 표준 색) */
   --status-run: #22C55E;     /* RUN 초록 */
-  --status-idle: #94A3B8;    /* IDLE 회색 */
-  --status-down: #EF4444;    /* DOWN 빨강 */
-  --status-pm: #3B82F6;      /* PM 파랑 */
+  --status-idle: #FACC15;    /* IDLE 노랑 (배치도 합의 2026-10-09: 회색→노랑) */
+  --status-down: #EF4444;    /* DOWN(BM) 빨강 */
+  --status-pm: #94A3B8;      /* PM 회색 (배치도 합의 2026-10-09: 파랑→회색) */
+
+  /* 설비 '상태'가 아닌 용도의 보조 색 — 상태 토큰 값이 바뀌어도 영향받지 않게 분리 */
+  --neutral: #94A3B8;        /* 일반 중립 회색 (비활성/보조 표시) */
+  --pm-task: #3B82F6;        /* '점검 유형 PM'·PM 지연 표시 파랑 (설비 상태 PM 과 별개) */
 
   /* 알람 심각도 */
   --alarm-warning: #F59E0B;
@@ -204,7 +208,8 @@ h4 {
 :root {
   --text-critical: #F87171;  /* --alarm-critical 의 글자용 (카드 위 대비 약 5.7:1) */
   --text-down: #F87171;      /* --status-down 의 글자용 */
-  --text-pm: #60A5FA;        /* --status-pm 의 글자용 */
+  --text-pm: #94A3B8;        /* --status-pm 의 글자용 */
+  --text-pm-task: #60A5FA;   /* --pm-task 의 글자용 (점검 유형 PM 배지) */
   --text-on-critical: #FFFFFF; /* --alarm-critical 배경 위 글자 */
 }
 

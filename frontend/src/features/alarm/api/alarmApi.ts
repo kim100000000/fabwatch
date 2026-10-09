@@ -1,11 +1,11 @@
 import { apiClient } from '@/shared/api'
 import type { PageResponse } from '@/shared/api'
+import { accumulateAlarm } from '../alarmSummary'
 import { compareAlarms } from '../types'
 import type {
   Alarm,
   AlarmListFilter,
   AlarmResolveRequest,
-  AlarmSeverity,
   AlarmStatus,
   ManualAlarmRequest,
   OpenAlarmSummary,
@@ -94,8 +94,6 @@ const MAX_PAGE_SIZE = 100
 /** 집계용 최대 조회 페이지 수 — 상태당 최대 2,000건. 넘으면 화면에서 집계가 잘렸음을 알 수 있도록 truncated 로 표시 */
 const MAX_SUMMARY_PAGES = 20
 
-const SEVERITY_RANK: Record<AlarmSeverity, number> = { WARNING: 0, MAJOR: 1, CRITICAL: 2 }
-
 /**
  * 전체 미해결(OPEN + ACK) 알람을 설비별로 집계한다.
  * 서버가 설비 목록 응답에 openAlarmCount 를 주지 않으므로(EquipmentSummaryResponse) 알람 목록 API 를
@@ -118,15 +116,7 @@ export async function fetchOpenAlarmSummary(signal?: AbortSignal): Promise<OpenA
       totalPages = response.totalPages
       response.content.forEach((alarm) => {
         total += 1
-        const current = byEquipment[alarm.equipmentId]
-        if (!current) {
-          byEquipment[alarm.equipmentId] = { count: 1, maxSeverity: alarm.severity }
-        } else {
-          current.count += 1
-          if (SEVERITY_RANK[alarm.severity] > SEVERITY_RANK[current.maxSeverity]) {
-            current.maxSeverity = alarm.severity
-          }
-        }
+        accumulateAlarm(byEquipment, alarm, status)
       })
       page += 1
     }

@@ -55,7 +55,7 @@
   letter-spacing: 0.03em;
 }
 
-.type-badge[data-type='PM'] { color: var(--text-pm); }
+.type-badge[data-type='PM'] { color: var(--text-pm-task); }
 .type-badge[data-type='BM'] { color: var(--text-down); }
 
 .ng-flag {
@@ -158,7 +158,7 @@
 }
 
 .type-toggle button.active[data-type='PM'] {
-  background: var(--status-pm);
+  background: var(--pm-task);
   color: var(--bg-base);
 }
 
@@ -264,7 +264,7 @@
   font-weight: 700;
 }
 .result-radios label[data-checked='true'][data-result='NA'] {
-  border-color: var(--status-idle);
+  border-color: var(--neutral);
   color: var(--text-primary);
 }
 
@@ -314,13 +314,15 @@
   margin-bottom: 16px;
   padding: 16px;
   border: 1px solid var(--border);
-  border-left: 4px solid var(--status-pm);
+  border-left: 4px solid var(--pm-task);
   border-radius: var(--radius);
   background: var(--bg-card);
 }
 
 .pm-card[data-overdue='true'] {
-  border-left-color: var(--status-down);
+  /* PM 지연: 빨강(DOWN 과 혼동) 대신 PM 파랑 — 굵은 왼쪽 보더 + 파랑 윤곽으로 정상 카드와 구분 */
+  border-color: var(--pm-task);
+  border-left-width: 7px;
 }
 
 .pm-card-head {
@@ -337,7 +339,7 @@
 }
 
 .pm-overdue-text {
-  color: var(--text-down);
+  color: var(--text-pm-task);
   font-weight: 700;
 }
 

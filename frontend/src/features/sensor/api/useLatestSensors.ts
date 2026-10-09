@@ -3,12 +3,19 @@ import axios from 'axios'
 import { toApiError } from '@/shared/api'
 import type { ApiError } from '@/shared/api'
 import { fetchLatestSensorData } from './sensorApi'
+import { noteReading } from '../receipt'
+import type { ReceiptBook } from '../receipt'
 import { compareSensorType } from '../types'
 import type { SensorEventPayload, SensorLatest, SensorThresholds } from '../types'
 
 export interface LatestSensorsResult {
   /** equipmentId → 센서별 최신값 (센서 종류 순서 고정) */
   sensorsByEquipment: Record<number, SensorLatest[]>
+  /**
+   * equipmentId → 브라우저가 그 설비의 새 센서값을 마지막으로 받은 시각(epoch ms).
+   * 끊김(stale) 판정용 — 서버 measuredAt 과 브라우저 시계를 비교하지 않으므로 시계 오차에 영향받지 않는다.
+   */
+  lastReceivedAt: Record<number, number>
   loading: boolean
   error: ApiError | null
   /**
@@ -39,6 +46,9 @@ export function useLatestSensors(equipmentIds: number[]): LatestSensorsResult {
   const [error, setError] = useState<ApiError | null>(null)
   // sensorId → equipmentId 색인 (SSE 이벤트 라우팅용)
   const ownerRef = useRef<Map<number, number>>(new Map())
+  // 센서별로 마지막에 본 measuredAt — 새 값을 받았는지 판정해 수신 시각을 기록한다
+  const receiptRef = useRef<ReceiptBook>(new Map())
+  const [lastReceivedAt, setLastReceivedAt] = useState<Record<number, number>>({})
 
   const reload = useCallback(
     async (signal?: AbortSignal): Promise<Record<number, SensorLatest[]>> => {
@@ -58,12 +68,18 @@ export function useLatestSensors(equipmentIds: number[]): LatestSensorsResult {
 
       const next: Record<number, SensorLatest[]> = {}
       const owner = new Map<number, number>()
+      const receivedNow = Date.now()
+      const touched: Record<number, number> = {}
       results.forEach(([equipmentId, sensors]) => {
         next[equipmentId] = sensors
-        sensors.forEach((sensor) => owner.set(sensor.sensorId, equipmentId))
+        sensors.forEach((sensor) => {
+          owner.set(sensor.sensorId, equipmentId)
+          if (noteReading(receiptRef.current, sensor.sensorId, sensor.measuredAt)) touched[equipmentId] = receivedNow
+        })
       })
       ownerRef.current = owner
       setSensorsByEquipment(next)
+      if (Object.keys(touched).length > 0) setLastReceivedAt((previous) => ({ ...previous, ...touched }))
       return next
     },
     [idsKey],
@@ -100,6 +116,11 @@ export function useLatestSensors(equipmentIds: number[]): LatestSensorsResult {
   const applySensorEvent = useCallback((payload: SensorEventPayload) => {
     const equipmentId = payload.equipmentId ?? ownerRef.current.get(payload.sensorId)
     if (equipmentId === undefined) return // 아직 목록에 없는 설비의 센서 — 무시
+
+    if (noteReading(receiptRef.current, payload.sensorId, payload.measuredAt)) {
+      const receivedNow = Date.now()
+      setLastReceivedAt((previous) => ({ ...previous, [equipmentId]: receivedNow }))
+    }
 
     setSensorsByEquipment((previous) => {
       const sensors = previous[equipmentId]
@@ -142,5 +163,5 @@ export function useLatestSensors(equipmentIds: number[]): LatestSensorsResult {
     [],
   )
 
-  return { sensorsByEquipment, loading, error, reload, applySensorEvent, applyThresholds }
+  return { sensorsByEquipment, lastReceivedAt, loading, error, reload, applySensorEvent, applyThresholds }
 }

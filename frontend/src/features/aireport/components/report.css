@@ -11,10 +11,10 @@
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
-  color: var(--status-idle);
+  color: var(--neutral);
 }
 
-.report-status[data-status='GENERATING'] { color: var(--status-idle); }
+.report-status[data-status='GENERATING'] { color: var(--neutral); }
 .report-status[data-status='DRAFT'] { color: var(--alarm-warning); }
 .report-status[data-status='CONFIRMED'] { color: var(--status-run); }
 .report-status[data-status='FAILED'] { color: var(--text-down); }
