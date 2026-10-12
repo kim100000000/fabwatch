@@ -32,7 +32,7 @@
 
   --accent: #06B6D4;         /* 포인트 (버튼/링크) */
   --radius: 8px;
-  --font: 'Pretendard', sans-serif;
+  --font: 'Pretendard Variable', 'Pretendard', sans-serif;  /* index.html 의 jsDelivr CSS 가 정의하는 family 는 'Pretendard Variable' */
   --font-mono: 'JetBrains Mono', monospace;  /* 센서 수치용 */
 }
 

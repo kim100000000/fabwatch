@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { useAuth } from '@/app/providers/useAuth'
 import { toUserMessage } from '@/shared/lib/errorMessage'
 import { Spinner } from '@/shared/ui'
-import { DEMO_ACCOUNTS, DEMO_LOGIN_ENABLED, DEMO_PASSWORD } from '../demoAccounts'
+import { DEMO_LOGIN } from '../demoAccounts'
 import type { DemoAccount } from '../demoAccounts'
 import './LoginForm.css'
 
@@ -23,7 +23,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   // 데모 계정 버튼 — 입력만 채우고 제출은 사용자가 직접 한다
   const fillDemo = (account: DemoAccount) => {
     setEmail(account.email)
-    setPassword(DEMO_PASSWORD)
+    setPassword(DEMO_LOGIN.password)
     setError(null)
   }
 
@@ -86,11 +86,11 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         {submitting ? '로그인 중…' : '로그인'}
       </button>
 
-      {DEMO_LOGIN_ENABLED && (
+      {DEMO_LOGIN.enabled && (
         <div className="login-demo">
           <p className="login-demo-title">데모 계정으로 둘러보기</p>
           <div className="login-demo-buttons">
-            {DEMO_ACCOUNTS.map((account) => (
+            {DEMO_LOGIN.accounts.map((account) => (
               <button
                 key={account.role}
                 type="button"
