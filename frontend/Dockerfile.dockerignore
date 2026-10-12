@@ -1,0 +1,11 @@
+# frontend/Dockerfile 전용 무시 목록 (컨텍스트=저장소 루트). 필요한 것만 허용하는 화이트리스트 방식.
+**
+!frontend
+!deploy
+
+# 호스트의 의존성·산출물·환경파일이 이미지에 섞이지 않게 한다
+# (특히 frontend/.env* 가 들어가면 VITE_ 값이 의도와 다르게 번들에 박힐 수 있음)
+frontend/node_modules
+frontend/dist
+frontend/.env*
+frontend/.vite

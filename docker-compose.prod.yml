@@ -1,0 +1,193 @@
+# FabWatch 운영 배포 (AWS 단일 EC2 + docker compose) — docs/13 §1·§4
+#
+#   사용: docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+#         (보통은 scripts/deploy.sh 가 대신 실행한다)
+#   로컬 개발용 docker-compose.yml(MySQL 만)과 별개 파일이며, 프로젝트 이름도 달라 볼륨/컨테이너가 섞이지 않는다.
+#
+#   인터넷 ─ 80/443 ─> caddy ──(edge 네트워크)──> backend:8080 ──(data 네트워크)──> mysql:3306
+#   호스트에 열리는 포트는 caddy 의 80/443 뿐이다. backend·mysql 은 호스트 포트를 publish 하지 않는다.
+
+name: fabwatch-prod
+
+# 로그 로테이션: 컨테이너당 10MB x 3개. 설정하지 않으면 json-file 로그가 디스크를 무제한으로 채운다.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # ---------------------------------------------------------------------------
+  # MySQL 8 — 외부 포트 없음. 데이터는 named volume(mysql_data)에 보존.
+  # ---------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-fabwatch}
+      MYSQL_USER: ${MYSQL_USER:-fabwatch}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?.env.prod 에 MYSQL_PASSWORD 가 필요합니다}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?.env.prod 에 MYSQL_ROOT_PASSWORD 가 필요합니다}
+      TZ: UTC
+    command:
+      - --default-time-zone=+00:00          # DB 는 UTC (CLAUDE.md 시각 규칙)
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      # 2GB 급 인스턴스 메모리 절약 (docs/13 §13 사이징)
+      - --innodb-buffer-pool-size=256M
+      - --max-connections=60                # Hikari 최대 10 + 여유
+      - --performance-schema=OFF            # 켜져 있으면 200~400MB 를 더 쓴다
+      - --skip-name-resolve
+      # 바이너리 로그는 PITR 용이다. 쓰지 않는데 켜 두면 센서 INSERT 로 디스크가 계속 찬다 (복구는 mysqldump 백업으로, docs/13 §8)
+      - --skip-log-bin
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks: [data]
+    healthcheck:
+      # 127.0.0.1(TCP) 로 ping — 초기화 중 임시 서버(skip-networking)는 통과하지 못하게 한다
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h 127.0.0.1 -uroot --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    mem_limit: 600m
+    stop_grace_period: 60s
+    security_opt: ["no-new-privileges:true"]
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # Spring Boot 백엔드 — backend/Dockerfile (다단계·비루트)은 백엔드 쪽 산출물.
+  # 환경변수 계약: docs/13 §3. 필수 값이 비어 있으면 compose 가 기동 전에 거부한다.
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+    image: fabwatch-backend:${IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      # Caddy 뒤에서 실제 클라이언트 IP/스킴을 복원한다 (레이트 리밋 키, docs/13 §12.3). 백엔드의 최종 결정은 native(Tomcat RemoteIpValve:
+      # docker 브리지 사설 대역 프록시가 보낸 XFF 만 신뢰하고 오른쪽부터 첫 비신뢰 주소를 클라이언트로 판정 → 위조 XFF 에 견고).
+      # framework 는 가장 왼쪽 XFF 를 검증 없이 믿어 위조에 취약하므로 쓰지 않는다. 바꾸려면 .env.prod 에 적는다.
+      SERVER_FORWARD_HEADERS_STRATEGY: ${SERVER_FORWARD_HEADERS_STRATEGY:-native}
+      # 컨테이너 내부 네트워크(비공개)이므로 TLS 없이 접속. caching_sha2_password 때문에 allowPublicKeyRetrieval 필요.
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-fabwatch}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
+      DB_USERNAME: ${MYSQL_USER:-fabwatch}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET 이 필요합니다 (32바이트 이상, openssl rand -base64 48)}
+      # 같은 도메인이라 CORS 가 필요 없지만, 프록시가 Origin/Host 를 어떻게 보내든 안전하도록 자기 Origin 만 허용한다 (* 금지)
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:?PUBLIC_ORIGIN 이 필요합니다 (예 https://fabwatch.example.com)}
+      # 운영 ADMIN 부트스트랩 — users 가 비어 있을 때 1회만 생성 (백엔드 구현 계약). 값 없는 키 = .env.prod 에 있을 때만 전달.
+      # 첫 배포에는 반드시 필요하고(scripts/deploy.sh 가 확인), 최초 로그인 뒤에는 .env.prod 에서 지워도 된다.
+      BOOTSTRAP_ADMIN_EMAIL:
+      BOOTSTRAP_ADMIN_PASSWORD:
+      BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-운영 관리자}
+      # AI — 키가 비어 있으면 리포트가 FAILED 로 떨어질 뿐 서비스는 정상 (docs/11 §7)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # 메모리: 컨테이너 한도(mem_limit)의 60% 를 힙으로. SerialGC 는 작은 힙에서 메모리를 가장 적게 쓴다.
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=60 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError}
+      # ---- 선택 튜닝값: .env.prod 에 적었을 때만 컨테이너로 전달된다(값 없는 키 = 호스트 값 패스스루). 안 적으면 백엔드 기본값. ----
+      # 공개 데모 데이터 로더(옵트인): DEMO_DATA_ENABLED=true 면 라인·설비·센서·PM 데모 데이터를 멱등 생성하고,
+      # DEMO_ACCOUNTS_PASSWORD 가 있으면 engineer/tech 데모 계정 2개를 만든다(ADMIN 데모 계정은 없음 — ADMIN 은 BOOTSTRAP 계정뿐).
+      DEMO_DATA_ENABLED:
+      DEMO_ACCOUNTS_PASSWORD:
+      AI_PROVIDER:
+      AI_MODEL:
+      AI_MAX_TOKENS:
+      AI_EFFORT:
+      AI_TIMEOUT_SECONDS:
+      AI_DAILY_QUOTA:
+      AI_USER_DAILY_QUOTA:
+      JWT_ACCESS_EXP_MIN:
+      JWT_REFRESH_EXP_DAYS:
+      JWT_REFRESH_GRACE_SECONDS:
+      RATE_LIMIT_AUTH_PER_MINUTE:
+      MAX_REQUEST_BYTES:
+      SSE_MAX_CONNECTIONS:
+      SSE_MAX_PER_USER:
+      SSE_ASYNC:
+      SSE_QUEUE_CAPACITY:
+      SSE_SEND_TIMEOUT_MS:
+      SSE_SENDER_THREADS:
+      SIMULATOR_ENABLED:
+      SCHEDULER_ENABLED:
+      SIMULATOR_DEMO_DURATION_MIN:
+      SIMULATOR_PLATEAU_HOLD_MIN:
+      SIMULATOR_MAX_LIFETIME_MIN:
+      SENSOR_PURGE_CHUNK_SIZE:
+      SENSOR_PURGE_CHUNK_PAUSE_MS:
+      SENSOR_QUERY_MAX_RANGE_DAYS:
+      SENSOR_QUERY_MAX_POINTS:
+      DB_POOL_MAX:
+      DB_CONNECTION_TIMEOUT_MS:
+      SHUTDOWN_TIMEOUT:
+    expose:
+      - "8080"
+    networks: [edge, data]
+    healthcheck:
+      # 이미지에 curl 또는 wget 이 있으면 동작 (둘 다 없으면 backend/Dockerfile 에서 설치할 것). status 가 최상위 키로 UP 일 때만 통과.
+      test: ["CMD-SHELL", "if command -v curl >/dev/null 2>&1; then curl -fsS http://127.0.0.1:8080/actuator/health; else wget -qO- http://127.0.0.1:8080/actuator/health; fi | grep -q '^{\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    mem_limit: 768m
+    stop_grace_period: 30s      # SHUTDOWN_TIMEOUT(기본 20s)보다 길게
+    security_opt: ["no-new-privileges:true"]
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # Caddy — 정적 파일(SPA) + /api 리버스 프록시 + 자동 HTTPS. 프론트 빌드와 Caddyfile 이 한 이미지에 들어 있다.
+  # ---------------------------------------------------------------------------
+  caddy:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api/v1                          # 같은 도메인 → 상대경로 (SSE 도 동일 base)
+        VITE_DEMO_LOGIN: ${VITE_DEMO_LOGIN:-false}          # 데모 계정 버튼: 공개 데모일 때만 .env.prod 에서 true (ADMIN 버튼은 없음)
+        # 백엔드 DEMO_ACCOUNTS_PASSWORD 와 **같은 변수**를 쓴다 → 서버 계정 비밀번호와 버튼이 채우는 값이 어긋날 수 없다.
+        # 공개되는 값(번들에 노출)이므로 ADMIN 비밀번호와 다르게. 비밀번호를 바꾸면 이미지를 다시 빌드해야 한다.
+        VITE_DEMO_PASSWORD: ${DEMO_ACCOUNTS_PASSWORD:-}
+    image: fabwatch-web:${IMAGE_TAG:-local}
+    restart: unless-stopped
+    # 기동 순서 mysql → backend → caddy. 백엔드가 healthy 가 된 뒤에 프록시를 올린다(첫 기동·재생성 시 502 방지).
+    # 이후 backend 가 죽어도 caddy 는 내려가지 않는다(정적 화면은 계속 서빙, API 만 502).
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      # 도메인 → 자동 HTTPS / ":80" → HTTP 전용(IP 로 먼저 띄울 때). deploy/Caddyfile 상단 설명 참고.
+      DOMAIN: ${DOMAIN:?DOMAIN 이 필요합니다 (예 fabwatch.example.com 또는 :80)}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"           # HTTP/3. 보안그룹에서 UDP 443 을 안 열면 브라우저가 자동으로 HTTP/2 로 내려간다
+    volumes:
+      - caddy_data:/data        # 발급된 인증서 — 날리면 재발급되며 Let's Encrypt 발급 한도에 걸릴 수 있다
+      - caddy_config:/config
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8081/ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    mem_limit: 96m
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    logging: *default-logging
+
+networks:
+  edge: {}                      # caddy ↔ backend
+  data:                         # backend ↔ mysql (외부 접근 불가, caddy 도 접근 불가)
+    internal: true
+
+volumes:
+  mysql_data: {}
+  caddy_data: {}
+  caddy_config: {}
