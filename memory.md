@@ -22,7 +22,7 @@
 | 센서 데이터 | 시뮬레이터 직접 제작 (외부 데이터셋 X) | 백엔드 내장 @Scheduled 2초 주기. DRIFT/SPIKE/STEP 시나리오 |
 | AI | Claude API (백엔드 경유만, 키는 env). 모델 `claude-sonnet-5-5`, `AI_PROVIDER=claude|mock`, effort low, 타임아웃 60초 | 리포트 max_tokens 4096(2000→상향: Sonnet 5.5는 thinking 기본 ON이라 사고 토큰이 max_tokens를 먹음), 일 20건 쿼터(ai_call_logs, KST 일자 전체 합산) |
 | 인증 | JWT Access 30분 + Refresh 14일(DB 저장) | 역할: ADMIN/ENGINEER/TECHNICIAN |
-| 배포 | Railway(백+DB) + Vercel(프론트) | 4주차 |
+| 배포 | **AWS 단일 EC2 + docker compose (caddy + backend + mysql)**, 같은 도메인에서 Caddy가 정적 파일+`/api` 프록시(자동 HTTPS) | ADR-12. Railway/Vercel 폐기(vercel.json 삭제). 레이트 리밋·SSE 상한·AI 쿼터가 인메모리라 단일 인스턴스 전제. 운영은 Flyway V1 + ddl-auto=validate, 시드 금지(옵트인 데모 데이터 로더만) |
 | 데이터 정책 | 센서 원본 7일 + 1분 집계 영구, 나머지 soft delete | |
 | 수익화 대비 | tenant_id 추가 지점에 `// TENANT:` 주석, 센서 없이도 점검 기능 독립 동작 | 실구현은 안 함 |
 | 시각 | DB는 UTC, 화면 KST. 교대 D=08~20시, N=20~08시 | |
@@ -50,10 +50,10 @@ docs/06_API명세서.md               ← REST + SSE 전체 엔드포인트
 docs/07_개발로드맵.md              ← 4주 계획 + 버퍼 규칙 + 취업 병행 일정
 docs/08_수익화전략.md              ← SaaS/템플릿/콘텐츠 3트랙 (실행은 취업 후)
 docs/09_체크리스트.md              ← 완성형 체크리스트 ★작업 완료 시마다 체크
-docs/10_아키텍처결정기록_면접대비.md ← ADR 11건 + 면접 답변집 (새 결정 시 ADR 추가)
+docs/10_아키텍처결정기록_면접대비.md ← ADR 12건 + 면접 답변집 (새 결정 시 ADR 추가)
 docs/11_보안명세서.md              ← 인증/인가/OWASP/시크릿/AI 보안
 docs/12_테스트계획서.md            ← 단위/통합/E2E 전략, 4대 핵심 도메인 테스트 케이스
-docs/13_배포운영명세서.md          ← Railway/Vercel 배포, 환경변수, 스케줄러, 장애 대응
+docs/13_배포운영명세서.md          ← AWS 단일 EC2+compose+Caddy 배포, 환경변수, 공개 데모 운영, 백업·롤백·Flyway 실패 복구, 장애 대응
 docs/14_용어사전.md                ← MES 도메인·시스템 용어, 에러코드 색인 (용어 단일 출처)
 docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다운샘플링, SSE 성능
 ```
@@ -113,7 +113,7 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 - 4개 리뷰(보안/백엔드/프론트/UI·UX) → 수정 3묶음(백엔드 보안, 백엔드 안정성, 프론트) 모두 반영. 테스트 백엔드 434→**578**, 프론트 **61**(vitest 신규), 빌드/lint 통과. 실MySQL·브라우저로 라이브 확인.
 - **보안**: refresh 비인증 로그아웃 차단(불일치 토큰은 401만, 서버 세션 유지), refresh_tokens 테이블(SHA-256 해시 저장·사용자당 최대 5세션·회전+10초 grace — 같은 데모 계정을 여러 명이 써도 서로 안 끊김), 로그인 실패 카운터 비관적 락+없는 이메일 더미 BCrypt(응답 시간 139ms vs 149ms로 평준화), IP별 레이트 리밋(인메모리 30/분, 429 RATE_LIMITED+Retry-After), 본문 1MB 상한(413), SSE 전역 200·사용자당 5 상한, 시뮬레이터 파라미터 범위 검증, 500 방지(reason 200자 절단·점검 content 20000자·잘못된 sort 400·DataIntegrity 409), 로그 인젝션 정제, docker-compose MySQL 127.0.0.1 바인딩. 재사용 탐지(전체 세션 무효화)는 비인증 강제 로그아웃 취약점의 원인이라 제거(docs/11 명시).
 - **안정성**: 센서 원본 삭제 배치 청크화+(measured_at) 인덱스+cron UTC(풀스캔 해소), 수집 틱 분리(원본 저장 커밋 후 센서별 오류 격리, 알람+자동 DOWN은 한 트랜잭션, SSE는 AFTER_COMMIT+구독자별 큐 비동기·느린 구독자 제거), 설비 상태 전환 비관 락(동시 변경 시 KPI 오염 방지), 시나리오 자동 만료(DRIFT plateau 후 5분·STEP/SPIKE 30분), 센서 이력 조회 31일 상한+포인트 상한 다운샘플링(5M/1H), PM 수정 시 스케줄 재계산·PM 지연 배치 건별 격리, 인덱스 추가, graceful shutdown·Hikari. 라이브 실측: 구조 변경 후에도 경고 ~50초→자동 DOWN 104초.
-- **프론트**: 401 후 재시도 실패를 세션 만료로 오인하던 버그 수정(리프레시 거부 시에만 로그아웃), 설비 목록 미해결 알람 0 오류 수정(알람 API 집계), 전역 ErrorBoundary/errorElement, 폴링 폴백 stale 덮어쓰기 수정, vercel.json SPA rewrites, 운영 빌드의 localhost 폴백 제거, 로그인 화면(데모 계정 버튼은 `VITE_DEMO_LOGIN`일 때만, 내부 문서 번호 제거), /admin ADMIN 한정, 대시보드 정렬·'조치 필요' 요약, 알람 센터(기본 미해결·점검 등록 바로가기 alarmId), 임계치 한글 라벨, 차트 5분 프리로드, 용어 툴팁(glossary), 390px 헤더, 접근성(글자용 색 토큰·포커스·reduced-motion·skip link·page title), SSE 20초 무수신 시 폴링 보강.
+- **프론트**: 401 후 재시도 실패를 세션 만료로 오인하던 버그 수정(리프레시 거부 시에만 로그아웃), 설비 목록 미해결 알람 0 오류 수정(알람 API 집계), 전역 ErrorBoundary/errorElement, 폴링 폴백 stale 덮어쓰기 수정, (vercel.json은 배포 준비 때 삭제 — Caddy가 SPA fallback), 운영 빌드의 localhost 폴백 제거, 로그인 화면(데모 계정 버튼은 `VITE_DEMO_LOGIN`일 때만, 내부 문서 번호 제거), /admin ADMIN 한정, 대시보드 정렬·'조치 필요' 요약, 알람 센터(기본 미해결·점검 등록 바로가기 alarmId), 임계치 한글 라벨, 차트 5분 프리로드, 용어 툴팁(glossary), 390px 헤더, 접근성(글자용 색 토큰·포커스·reduced-motion·skip link·page title), SSE 20초 무수신 시 폴링 보강.
 - 점검 원문: 보안 `.claude/_workspace/review/security_20261006.md`(나머지 3개는 파일 저장 안 됨, 위 요약이 전부).
 
 ### 설비 배치도(Floor Map) 뷰 — 2026-10-09 (프론트 단독, 백엔드 변경 없음)
@@ -125,9 +125,16 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 - [x] **데모 제어 패널 개편** (사용자 지적: 패널이 커서 배치도를 가림, '주입'이 10분짜리라 시연 때 변화 없음): 폭 280px 컴팩트, 헤더 드래그/방향키 이동(뷰포트 clamp·위치 localStorage 저장·Home/↺ 초기화), 주 버튼 '데모 자동 시작(약 2분)' + 접이식 '수동 주입(고급)'(DRIFT 지속시간 2/5/10분, 기본 2분), 설비에 있는 센서만 선택 가능. 프론트 테스트 103→**117**. 시연 확인: 데모 자동 시작 → 약 46초 점선 링+모터 경고 파트 → 약 117초 DOWN(BM)+위험 링+컨베이어 정지
 - [ ] 이월(LOW): 알람 링 무기한 깜빡임 일시정지 수단 없음(reduced-motion만), MAJOR 링은 수동 MAJOR 알람 때만 도달, `useProcessSeq`의 `GET /lines` 중복 호출, 집계 truncated 무시, FloorMapUnit memo 없음(100대 규모 시), 재조회 max-wait 없음/진행 중 응답이 statusOverride를 비워 잠깐 깜빡일 수 있음, 컴포넌트(tsx) 테스트 설정 없음(vitest가 .test.ts만), 알람 센터 외 화면의 IDLE 노랑 대비 점검, README 스크린샷에 배치도 반영 여부
 
+### 배포 준비 (파일·설정 작업) — 2026-10-12 완료, 실서버 배포 전
+- [x] **백엔드**: Flyway V1__init.sql(18테이블, 임시 MySQL에서 Hibernate 스키마와 information_schema 대조 일치 + `ddl-auto=validate` 기동 성공; `lines` 백틱 필요 — H2 테스트로는 못 잡음, 마이그레이션 추가 때마다 실MySQL 확인), 운영 ADMIN 부트스트랩(`BOOTSTRAP_ADMIN_EMAIL/PASSWORD/NAME`, users 비었을 때만, 반쪽 설정·약한 비번은 기동 실패), 옵트인 데모 데이터 로더(`DEMO_DATA_ENABLED`, `DEMO_ACCOUNTS_PASSWORD`로 ENGINEER/TECHNICIAN 2계정만, ADMIN 데모 계정 없음, @Order로 부트스트랩이 먼저), JWT_SECRET 32바이트 미만 기동 실패, `spring.profiles.default` 제거(bootRun은 local 기본), bootJar에서 application-local.yml 제외, XFF 기본 `native`(위조 차단, 환경변수로 framework 전환 가능), `SIMULATOR_ENABLED`, 비루트 다단계 Dockerfile. **AI 쿼터 사용자별 일일 상한 `AI_USER_DAILY_QUOTA`(기본 5, 전체 20 유지)** 추가
+- [x] **인프라**: `deploy/Caddyfile`(자동 HTTPS, SSE 버퍼링 off, 보안 헤더+CSP unsafe-inline 없이, `?token=` 로그 마스킹, 위조 헤더 제거), `docker-compose.prod.yml`(caddy 80/443만 노출, mysql internal 네트워크, 메모리 제한, caddy→backend healthy 의존), `frontend/Dockerfile`(Caddy 이미지에 dist 포함), `deploy/env.prod.example`(루트 `.env.prod.example`는 권한 규칙으로 못 만듦), `scripts/deploy.sh`(배포 전 자동 백업·헬스 실패/up 실패 시 자동 롤백), `scripts/backup-mysql.sh`, docs/13 전면 재작성(공개 데모 운영 §4.4, Flyway 실패 복구 §9)·docs/10 ADR-12·docs/11 갱신, 프론트 데모 로그인(운영 데모 빌드는 ADMIN 버튼 숨김, `VITE_DEMO_PASSWORD`는 공개 값), 폰트 변수 수정
+- [x] **통합 QA(실제 compose 스택 별도 포트 종단)**: HIGH 0 / MED 6 / LOW 11 → MED 전부·LOW 대부분 수정. 백엔드 622(전 578→611→622), 프론트 123 통과. 리포트 `.claude/_workspace/qa/deploy-prep_20261012.md`
+- **공개 데모 위험(수용, docs/11 §5·docs/13 §4.4에 명시)**: 데모 계정 5회 오답 → 15분 잠금 DoS(IP 레이트 리밋으로 못 막음; ADMIN 이메일은 추측 불가 값 사용), ENGINEER는 시나리오 주입·상태 전환·수동 알람·점검 대량 작성·AI 호출 가능, TECHNICIAN의 CRITICAL 수동 알람이 자동 DOWN 유발, 인증 후 쓰기 API엔 레이트 리밋 없음, 즉시 복구는 백업 복구/볼륨 리셋뿐
+- 미처리(LOW): SSE 연결 시 graceful shutdown 20초, 타 Origin CORS 403 평문, 권한 없는 잘못된 본문이 400 먼저, jar 내 LocalDataSeeder 상수(@Profile local이라 미실행), backend Dockerfile jar 글롭이 SNAPSHOT 의존, caddy uid 0(cap_drop ALL), backend rootfs 쓰기 가능, 폰트·CDN(jsDelivr/Google Fonts) 자체 호스팅 후속
+
 ### 남음
 - [ ] **실 Claude API 호출 검증** (ANTHROPIC_API_KEY 필요, `AI_PROVIDER=claude`): 응답 형식·토큰·지연(60초 내)·effort low 품질. yml 기본값 정정 후 처음으로 실제 4096/60이 적용됨.
-- [ ] **배포 준비**(AWS 단일 EC2+docker compose 방향으로 논의됨, 지원 시작 시점에 가입 권장 — Free 플랜 $200·6개월, 자동 청구 없음, Budgets 알림): ① **Flyway V1__init.sql**(prod ddl-auto=validate라 refresh_tokens·신규 인덱스 4개 포함해 스키마를 만들어야 함; docs/13에 refresh_tokens DDL 있음) ② **운영 ADMIN 부트스트랩**(환경변수, users 비었을 때만; 운영에서 시드·fabwatch123 금지) ③ `spring.profiles.default: local` 제거 ④ jar에 application-local.yml 포함 문제(.dockerignore/빌드 제외) ⑤ 다단계 Dockerfile(비루트)·docker-compose.prod·nginx/Caddy(SSE 프록시 버퍼링 off, 보안 헤더/CSP) ⑥ `server.forward-headers-strategy=framework`(레이트 리밋 IP), CORS `Access-Control-Expose-Headers: Retry-After` ⑦ JWT_SECRET 필수 고정
+- [ ] **실서버 배포(사용자 몫)**: AWS 가입(지원 시작 시점 권장 — Free 플랜 $200·6개월, 자동 청구 없음, Budgets 알림) → EC2(t3.small 추정 정상 ~1.4GB/피크 1.6~1.7GB, 스왑 2GB 필수·부족하면 t3.medium) → 보안그룹 80/443 + SSH 내 IP → `deploy/env.prod.example` 기반 `.env.prod`(JWT_SECRET 48바이트, BOOTSTRAP_ADMIN_* 이메일은 추측 불가 값, DEMO_DATA_ENABLED/DEMO_ACCOUNTS_PASSWORD, ANTHROPIC_API_KEY) → `scripts/deploy.sh`(**실서버 실행은 한 번도 안 해봄** — 도메인 모드 smoke, 인증서 발급, 자동 롤백 종단 확인 필요) → 클라이언트 IP·레이트 리밋 EC2에서 실측(docs/13 §10 체크리스트) → 백업 cron + EBS 스냅샷/S3 사본 → 복구 훈련
 - [ ] 포트폴리오 마무리: 이력서용 3줄 설명, 시연 GIF/영상(선택), 배포 URL을 README에 반영(README 스크린샷 중 01은 최신, 나머지 02~05는 이전 UI 기준 — 필요 시 재촬영), 지인 1명 3분 테스트, 태블릿 폭 실확인(코드 기준만)
 - [ ] 여유분(Should): 사용자 등록/비활성화·비밀번호 변경(FR-1.3, 운영에서 시드 계정 비밀번호 문제 해소에도 필요), 교대 인수인계 요약(FR-6.5)
 - [ ] **로컬 DB 정리 필요(사용자 직접)**: `sensor_threshold_logs` id 1~4(UI 검증용 테스트 이력) — 권한 규칙으로 내가 못 지움: `docker exec fabwatch-mysql mysql -ufabwatch -pfabwatch_local fabwatch -e "delete from sensor_threshold_logs where id in (1,2,3,4)"`
@@ -135,7 +142,7 @@ docs/15_성능부하명세서.md          ← SLO, 병목 예측, 인덱스/다�
 ## 5. 다음 작업 지시 (그대로 실행 가능)
 
 ```
-다음: 배포 준비(위 '남음' 참고) — 코드 기능 개발과 배포 전 점검 수정, 설비 배치도 뷰는 끝남(배치도·데모 패널 develop에 커밋 완료, main 머지는 하지 않음). 사용자가 배포 시점을 정하면 Flyway/부트스트랩/Dockerfile부터. 실 Claude 호출은 키 준비 시 최우선 검증.
+다음: 코드·배포 파일 준비는 끝남(배치도, 데모 패널, Flyway/부트스트랩/데모 로더/Dockerfile/compose/Caddy/배포·백업 스크립트/docs/13). 남은 건 사용자가 AWS 가입 시점을 정해 실서버 배포(위 '남음')하는 것과, ANTHROPIC_API_KEY 준비 시 실 Claude 호출 검증(최우선). 그 전 선택 작업: README 스크린샷에 배치도 반영·이력서 3줄·시연 영상, 상시 랜덤 이상 모드(제안만, 미결정). main 머지는 사용자가 명시할 때만.
 
 기술 부채·후속(우선순위 낮음):
    - react-router-dom 7 업그레이드(moderate 취약점 2건, major라 미적용), 번들 937kB(EquipmentDetailPage·ReportDetailPage lazy 분할 + 공용 CSS를 shared로 이전해야 가능), FSD 개편(EquipmentDetailTabs가 4개 feature를 런타임 import, features→app useAuth 9곳)
@@ -163,8 +170,7 @@ F-3 이월/후속 (우선순위 순):
    - DOWN 이탈(DOWN→IDLE/RUN) 시 BM 점검이력 연결을 "권장→강제"로 올림 (사용자 결정: F-3 이후 단계 — 이제 착수 가능)
    - 점검 이력 작업자 필터: 일반 역할이 쓸 사용자 목록 API가 없어 '내 점검만'으로 대체함. 필요하면 사용자 목록(이름만) 조회 API 추가
    - PM 체크리스트 템플릿 관리 UI 없음(API만 있음, ENGINEER+). 시드 템플릿으로 동작
-   - 시드 PM 스케줄이 8월 기준이라 5대 전부 OVERDUE(실DB는 시드 건너뜀). 데모 전에 스케줄 재설정 또는 DB 시드 재생성 필요
-   - 서버 재시작마다 JWT 시크릿이 바뀌어 로그인이 풀림(JWT_SECRET 미설정). .env에 고정값 두면 개발 편의 개선
+   - (로컬 시드의 PM 스케줄은 LAMI-02만 OVERDUE로 유지 — 운영 데모 로더는 전부 미래 일정이라 해당 없음)
    - QA LOW 잔여: DOWN→IDLE이 역할값을 보지 않음(알려진 3역할 선결조건 권장, EquipmentService.validateManualChange), 판정순서(403→400)·null/미지 역할 테스트 없음,
      POST /alarms/manual로 TECHNICIAN이 CRITICAL을 올리면 autoDown 발생(기존 설계, docs/03 명시 권장), PM 이력 수정 시 endedAt 변경이 스케줄에 미반영,
      한 스케줄 실패가 PM 지연 배치 전체 롤백, PM 스케줄 최초 설정 동시요청 UNIQUE 위반 500, ?id= 딥링크 마운트 1회만 반영, 서버 null 가능 필드를 프론트가 non-null로 선언
@@ -182,6 +188,7 @@ F-3 이월/후속 (우선순위 순):
 
 | 날짜 | 작업 | 결과/결정 |
 |---|---|---|
+| 2026-10-12 | **배포 준비 (AWS 단일 EC2+compose+Caddy)** (하네스: backend-dev ∥ infra(frontend-dev) → 후속 지시 → mes-qa 실스택 종단 → 수정 재투입) | Flyway V1+부트스트랩+옵트인 데모 로더+JWT fail-fast+XFF native+Dockerfile / Caddyfile+compose+배포·백업 스크립트+docs/13 재작성+ADR-12. QA가 compose가 native 결정을 framework로 덮어쓰던 것, 데모 계정 AI 쿼터 소진·잠금 DoS 재현 → 사용자별 AI 상한 추가, 위험 명시. 테스트 백엔드 622·프론트 123. 실서버 deploy.sh 실행·EC2 IP 검증·실 Claude 호출은 미검증. 리포트 `.claude/_workspace/qa/deploy-prep_20261012.md`. develop 커밋 |
 | 2026-10-09 | **설비 배치도(Floor Map) 뷰** (하네스: frontend-dev → mes-qa → 수정 재투입, 백엔드 변경 없음) | 상태 4색(RUN 초록/IDLE 노랑/PM 회색/DOWN 빨강)+알람 링/뱃지+센서 이상 파트 강조+수신 끊김, 공정 순서 자동 배치 SVG, 대시보드 배치도/카드 토글. PD는 상태 대신 DOWN 유형 확장 지점으로 남기고 제외(ADR-11). PM_OVERDUE는 링·건수 제외, PM 지연 색 파랑 통일, 끊김은 수신 시각 기준. 기존 scheduleServerRefresh 덮어쓰기 버그 수정. QA HIGH 0/MED 5 수정, 프론트 테스트 61→103. 실MySQL DRIFT 라이브 확인(경고 ~40초→DOWN ~107초). 리포트 `.claude/_workspace/qa/floormap_20261009.md`. 데모 제어 패널도 컴팩트·드래그 이동으로 개편(테스트 117). develop에 커밋 |
 | 2026-10-08 | **배포 전 점검 수정 완료·통합 검증** (리뷰 4종 → 수정 3묶음 병렬: 백엔드 보안 / 백엔드 안정성 / 프론트) | 보안 HIGH 3·백엔드 HIGH 3·프론트 HIGH 5·UI/UX HIGH 5 중 배포 비종속 항목 전부 수정(refresh 비인증 로그아웃 차단·다중 세션 해시, 레이트 리밋/본문/SSE 상한, 수집 틱 분리·삭제 배치 청크화·설비 락·시나리오 만료, 프론트 오인 로그아웃·미해결 알람 0·ErrorBoundary·로그인/대시보드/알람센터 UX·접근성). 테스트 백엔드 578·프론트 61(vitest 신규). 실서버 확인: 위조 refresh 401, 2기기 동시 refresh 200/200, 해시 저장, 413, 400(sort/40일 조회), 로그인 타이밍 평준화, 레이트 리밋 429, 데모 경고~50초→자동 DOWN 104초. 에이전트 한도 오류로 중단된 작업은 SendMessage로 재개해 완료. 배포 종속 항목(Flyway·ADMIN 부트스트랩·프로파일·Dockerfile)과 실 Claude 호출 검증은 남음 |
 | 2026-10-06 | **개발 마무리: 설비 상세 헤더·임계치 편집 화면·작업자 필터 + 최종 점검** (하네스: backend/frontend 병렬 → mes-qa → 수정 → 라이브 검증) | FR-2.3/2.4/3.5 완료(체크리스트 Must 미완 항목 해소), /users/lookup, 405·415·406 핸들러, 임계치 자릿수·전부 비우기 차단, Modal 접근성. 최종 점검: 에러 포맷 전 경로 통일, 비밀키 clean, NFR-1 실측 32ms. QA에서 범위 밖 X-1 발견(yml이 AI 기본값 덮어씀 → F-6 수정 무효였음)→정정·바인딩 테스트. 테스트 411→434. 에이전트가 만든 임계치 테스트 이력 4건은 권한 규칙으로 삭제 못 해 남아 있음(사용자 정리 필요) |
