@@ -81,11 +81,12 @@ public class LocalDataSeeder implements CommandLineRunner {
         }
         log.info("시드 데이터 생성 시작 (local)");
 
+        DemoMasterData masterData = new DemoMasterData(em, lineRepository);
         Map<String, User> users = seedUsers();
-        Map<String, Equipment> equipments = seedLineTree(users);
-        Map<String, List<Sensor>> sensors = seedSensors(equipments);
-        List<ChecklistItem> checklist = seedChecklist(equipments.get("LAMI-01"));
-        seedPmSchedules(equipments);
+        Map<String, Equipment> equipments = masterData.seedLineTree(users.get("engineer").getId());
+        Map<String, List<Sensor>> sensors = masterData.seedSensors(equipments);
+        List<ChecklistItem> checklist = masterData.seedChecklist(equipments.get("LAMI-01"));
+        masterData.seedPmSchedules(equipments, true); // local은 OVERDUE 시연용 포함
         List<Alarm> alarms = seedAlarms(equipments, sensors, users);
         seedInspections(equipments, users, checklist, alarms);
         seedStatusLogs(equipments, users);
@@ -117,135 +118,6 @@ public class LocalDataSeeder implements CommandLineRunner {
                 .role(role)
                 .enabled(true)
                 .build();
-    }
-
-    /** CELL-1라인 > 공정 3개 > 설비 5대 (docs/03 F-4.1) */
-    private Map<String, Equipment> seedLineTree(Map<String, User> users) {
-        Line line = new Line("CELL-1라인");
-        Process bonding = new Process("합착", 1);
-        Process cutting = new Process("절단", 2);
-        Process inspecting = new Process("검사", 3);
-        line.addProcess(bonding);
-        line.addProcess(cutting);
-        line.addProcess(inspecting);
-
-        Long managerId = users.get("engineer").getId();
-        Map<String, Equipment> equipments = new LinkedHashMap<>();
-        equipments.put("LAMI-01", newEquipment(bonding, "LAMI-01", "합착기 1호기", "FW-LAM-2000", "가상정밀",
-                LocalDate.of(2022, 3, 14), EquipmentStatus.RUN, managerId));
-        equipments.put("LAMI-02", newEquipment(bonding, "LAMI-02", "합착기 2호기", "FW-LAM-2000", "가상정밀",
-                LocalDate.of(2022, 6, 2), EquipmentStatus.RUN, managerId));
-        equipments.put("OVEN-01", newEquipment(bonding, "OVEN-01", "경화로 1호기", "FW-OVN-500", "가상열기",
-                LocalDate.of(2021, 11, 20), EquipmentStatus.RUN, managerId));
-        equipments.put("SCRB-01", newEquipment(cutting, "SCRB-01", "스크라이버 1호기", "FW-SCR-880", "가상머신",
-                LocalDate.of(2023, 1, 9), EquipmentStatus.IDLE, managerId));
-        equipments.put("AOI-01", newEquipment(inspecting, "AOI-01", "AOI 검사기 1호기", "FW-AOI-120", "가상비전",
-                LocalDate.of(2023, 5, 30), EquipmentStatus.RUN, managerId));
-
-        lineRepository.saveAndFlush(line);
-        return equipments;
-    }
-
-    private Equipment newEquipment(Process process, String code, String name, String model, String maker,
-                                   LocalDate installedAt, EquipmentStatus status, Long managerId) {
-        Equipment equipment = Equipment.builder()
-                .code(code).name(name).modelName(model).maker(maker)
-                .installedAt(installedAt).status(status).managerId(managerId)
-                .note(null)
-                .build();
-        process.addEquipment(equipment);
-        return equipment;
-    }
-
-    /** 센서 18개 + 임계치 (docs/03 F-4.1 — 전부 가상값) */
-    private Map<String, List<Sensor>> seedSensors(Map<String, Equipment> equipments) {
-        Map<String, List<Sensor>> result = new LinkedHashMap<>();
-        result.put("LAMI-01", List.of(
-                sensor(equipments.get("LAMI-01"), Sensor.Type.TEMP, "℃", 45.0, 0.8, 38, 50, 35, 55),
-                sensor(equipments.get("LAMI-01"), Sensor.Type.VIBRATION, "mm/s", 2.0, 0.3, null, 3.5, null, 5.0),
-                sensor(equipments.get("LAMI-01"), Sensor.Type.PRESSURE, "kPa", -95.0, 1.5, -105, -85, -110, -80),
-                sensor(equipments.get("LAMI-01"), Sensor.Type.CURRENT, "A", 12.0, 0.5, 8, 15, 6, 18)));
-        result.put("LAMI-02", List.of(
-                sensor(equipments.get("LAMI-02"), Sensor.Type.TEMP, "℃", 46.0, 0.9, 38, 51, 35, 56),
-                sensor(equipments.get("LAMI-02"), Sensor.Type.VIBRATION, "mm/s", 2.2, 0.3, null, 3.5, null, 5.0),
-                sensor(equipments.get("LAMI-02"), Sensor.Type.PRESSURE, "kPa", -94.0, 1.6, -105, -85, -110, -80),
-                sensor(equipments.get("LAMI-02"), Sensor.Type.CURRENT, "A", 12.5, 0.5, 8, 15, 6, 18)));
-        result.put("SCRB-01", List.of(
-                sensor(equipments.get("SCRB-01"), Sensor.Type.TEMP, "℃", 38.0, 0.6, 30, 44, 28, 48),
-                sensor(equipments.get("SCRB-01"), Sensor.Type.VIBRATION, "mm/s", 3.5, 0.4, null, 5.0, null, 6.5),
-                sensor(equipments.get("SCRB-01"), Sensor.Type.PRESSURE, "kPa", 500.0, 8.0, 460, 540, 440, 560),
-                sensor(equipments.get("SCRB-01"), Sensor.Type.CURRENT, "A", 8.0, 0.4, 5, 11, 4, 13)));
-        result.put("AOI-01", List.of(
-                sensor(equipments.get("AOI-01"), Sensor.Type.TEMP, "℃", 30.0, 0.4, 24, 34, 22, 37),
-                sensor(equipments.get("AOI-01"), Sensor.Type.VIBRATION, "mm/s", 0.8, 0.15, null, 1.5, null, 2.2),
-                sensor(equipments.get("AOI-01"), Sensor.Type.CURRENT, "A", 5.0, 0.3, 3, 7, 2, 8)));
-        result.put("OVEN-01", List.of(
-                sensor(equipments.get("OVEN-01"), Sensor.Type.TEMP, "℃", 120.0, 1.5, 112, 128, 108, 133),
-                sensor(equipments.get("OVEN-01"), Sensor.Type.VIBRATION, "mm/s", 1.0, 0.2, null, 2.0, null, 3.0),
-                sensor(equipments.get("OVEN-01"), Sensor.Type.CURRENT, "A", 20.0, 1.0, 15, 25, 13, 28)));
-        result.values().forEach(list -> list.forEach(em::persist));
-        em.flush();
-        return result;
-    }
-
-    private Sensor sensor(Equipment equipment, Sensor.Type type, String unit, double base, double sigma,
-                          Integer warnLow, Number warnHigh, Integer critLow, Number critHigh) {
-        return Sensor.builder()
-                .equipmentId(equipment.getId())
-                .type(type)
-                .unit(unit)
-                .baseValue(BigDecimal.valueOf(base))
-                .noiseSigma(BigDecimal.valueOf(sigma))
-                .warnLow(warnLow == null ? null : BigDecimal.valueOf(warnLow))
-                .warnHigh(warnHigh == null ? null : BigDecimal.valueOf(warnHigh.doubleValue()))
-                .critLow(critLow == null ? null : BigDecimal.valueOf(critLow))
-                .critHigh(critHigh == null ? null : BigDecimal.valueOf(critHigh.doubleValue()))
-                .build();
-    }
-
-    /** LAMI-01 PM 체크리스트 5항목 (docs/05 §4) */
-    private List<ChecklistItem> seedChecklist(Equipment lami01) {
-        List<ChecklistItem> items = List.of(
-                checklistItem(lami01, "합착 롤러 마모 확인", "마모선 이내", 1),
-                checklistItem(lami01, "진공 압력 점검", "기준 진공도 유지", 2),
-                checklistItem(lami01, "클린룸 파티클 체크", "관리 기준 이내", 3),
-                checklistItem(lami01, "구동부 윤활 상태", "오일 게이지 중간선 이상", 4),
-                checklistItem(lami01, "안전 인터락 동작 확인", "정상 동작", 5));
-        items.forEach(em::persist);
-        em.flush();
-        return items;
-    }
-
-    private ChecklistItem checklistItem(Equipment equipment, String name, String criteria, int seq) {
-        return ChecklistItem.builder()
-                .equipmentId(equipment.getId())
-                .itemName(name)
-                .criteria(criteria)
-                .seq(seq)
-                .active(true)
-                .build();
-    }
-
-    /** 설비별 PM 스케줄 (docs/03 F-3.3) */
-    private void seedPmSchedules(Map<String, Equipment> equipments) {
-        Instant now = Instant.now();
-        persistPm(equipments.get("LAMI-01"), PmSchedule.CycleType.WEEKLY, 1, now.minus(5, ChronoUnit.DAYS), now.plus(2, ChronoUnit.DAYS));
-        persistPm(equipments.get("LAMI-02"), PmSchedule.CycleType.WEEKLY, 4, now.minus(9, ChronoUnit.DAYS), now.minus(2, ChronoUnit.DAYS)); // OVERDUE 시연용
-        persistPm(equipments.get("OVEN-01"), PmSchedule.CycleType.MONTHLY, 1, now.minus(20, ChronoUnit.DAYS), now.plus(10, ChronoUnit.DAYS));
-        persistPm(equipments.get("SCRB-01"), PmSchedule.CycleType.MONTHLY, 15, now.minus(12, ChronoUnit.DAYS), now.plus(18, ChronoUnit.DAYS));
-        persistPm(equipments.get("AOI-01"), PmSchedule.CycleType.DAILY, null, now.minus(1, ChronoUnit.DAYS), now.plus(4, ChronoUnit.HOURS));
-        em.flush();
-    }
-
-    private void persistPm(Equipment equipment, PmSchedule.CycleType type, Integer value, Instant lastDone, Instant nextDue) {
-        em.persist(PmSchedule.builder()
-                .equipmentId(equipment.getId())
-                .cycleType(type)
-                .cycleValue(value)
-                .lastDoneAt(lastDone)
-                .nextDueAt(nextDue)
-                .overdueAlarmSent(false)
-                .build());
     }
 
     /** 데모용 알람 10건 (docs/05 §4) */

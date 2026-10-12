@@ -369,6 +369,28 @@ class AiReportApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("개인 쿼터: ENGINEER가 5건 소진하면 403(개인 한도 메시지), 다른 사용자(ADMIN)는 계속 가능")
+    void quota_perUser() throws Exception {
+        String engineer = login("engineer@fabwatch.dev");
+        String admin = login("admin@fabwatch.dev");
+        long alarmId = firstAlarm(engineer).get("id").asLong();
+        Long engineerId = jdbc.queryForObject("select id from users where email = 'engineer@fabwatch.dev'", Long.class);
+        for (int i = 0; i < 5; i++) {
+            callLogRepository.save(new AiCallLog(null, engineerId, Instant.now(), "mock", "mock"));
+        }
+
+        mockMvc.perform(post("/api/v1/ai-reports").header("Authorization", bearer(engineer))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"alarmId\":" + alarmId + "}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AI_QUOTA_EXCEEDED"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("개인")));
+        assertThat(callLogRepository.count()).isEqualTo(5);
+
+        long reportId = requestReport(admin, "{\"alarmId\":" + alarmId + "}"); // 다른 사용자는 영향 없음
+        awaitNotGenerating(admin, reportId);
+    }
+
+    @Test
     @DisplayName("쿼터 집계는 어제(KST) 호출을 세지 않는다")
     void quota_ignoresYesterday() throws Exception {
         String engineer = login("engineer@fabwatch.dev");

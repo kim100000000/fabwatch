@@ -87,6 +87,9 @@ public class SimulatorSensorDataSource implements SensorDataSource {
     @Override
     @Transactional
     public List<SensorReading> read(Instant at) {
+        if (!properties.enabled()) {
+            return List.of(); // 운영 스위치(SIMULATOR_ENABLED=false): 센서 데이터를 만들지 않는다
+        }
         List<SensorSpec> specs = sensorQueryService.findAllSpecs();
         if (specs.isEmpty()) {
             return List.of();

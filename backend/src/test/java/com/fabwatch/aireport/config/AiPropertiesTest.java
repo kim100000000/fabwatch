@@ -36,6 +36,17 @@ class AiPropertiesTest {
     }
 
     @Test
+    @DisplayName("개인 일일 한도: 기본 5, user-daily-quota로 덮어쓰고, 0 이하는 기동 실패")
+    void userDailyQuota() {
+        assertThat(bind(Map.of("fabwatch.ai.provider", "claude")).userDailyQuota()).isEqualTo(5);
+        assertThat(bind(Map.of("fabwatch.ai.user-daily-quota", "3")).userDailyQuota()).isEqualTo(3);
+        assertThatThrownBy(() -> bind(Map.of("fabwatch.ai.user-daily-quota", "0"))).isInstanceOf(RuntimeException.class);
+        assertThatThrownBy(() -> bind(Map.of("fabwatch.ai.user-daily-quota", "-1"))).isInstanceOf(RuntimeException.class);
+        // 13인자 호환 생성자도 기본 5
+        assertThat(withKeyAndEffort("k", "low").userDailyQuota()).isEqualTo(5);
+    }
+
+    @Test
     @DisplayName("H-1: 설정값으로 덮어쓸 수 있다 (timeout-seconds / effort / max-tokens)")
     void overridable() {
         AiProperties props = bind(Map.of("fabwatch.ai.timeout-seconds", "90", "fabwatch.ai.effort", "Medium",

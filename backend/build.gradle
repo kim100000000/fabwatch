@@ -46,6 +46,11 @@ dependencies {
 
     runtimeOnly 'com.mysql:mysql-connector-j'
 
+    // DB 마이그레이션 (prod: ddl-auto=validate + Flyway가 스키마 생성). 버전은 Spring Boot BOM이 관리.
+    // MySQL 8 지원 모듈(flyway-mysql)이 따로 필요하다. local/test는 spring.flyway.enabled=false (application.yml)
+    implementation 'org.flywaydb:flyway-core'
+    runtimeOnly 'org.flywaydb:flyway-mysql'
+
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'com.h2database:h2'
@@ -58,6 +63,21 @@ tasks.named('test') {
     useJUnitPlatform()
     // 테스트는 test 프로파일(H2 인메모리) — 로컬 MySQL 없이도 돌아야 한다 (docs/13 §2)
     systemProperty 'spring.profiles.active', 'test'
+}
+
+// 로컬 실행 편의: 프로파일 기본값(spring.profiles.default)을 없앤 대신 bootRun에서만 local을 기본 지정한다.
+// SPRING_PROFILES_ACTIVE 환경변수를 직접 준 경우(예: prod 점검)에는 그 값을 우선한다.
+// 운영 jar/컨테이너는 bootRun을 거치지 않으므로 프로파일을 명시하지 않으면 local로 뜨지 않는다.
+tasks.named('bootRun') {
+    if (!System.getenv('SPRING_PROFILES_ACTIVE')) {
+        systemProperty 'spring.profiles.active', 'local'
+    }
+}
+
+// 운영 jar에 로컬 개발 설정(로컬 DB 비밀번호·개발용 JWT 키가 들어있는 application-local.yml)을 포함하지 않는다.
+// bootRun/test는 build/resources/main 을 직접 쓰므로 영향 없다(jar 패키징 단계에서만 제외).
+tasks.named('bootJar') {
+    exclude '**/application-local.yml'
 }
 
 tasks.withType(JavaCompile).configureEach {

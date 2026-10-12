@@ -20,8 +20,8 @@ import java.util.Set;
  * 로그인·리프레시 IP별 레이트 리밋 (docs/11 §4, 보안 감사 M-2·M-3).
  * - 대상: POST /api/v1/auth/login, POST /api/v1/auth/refresh — IP × 엔드포인트별로 분당 N회(기본 30)
  * - 초과 시 429 RATE_LIMITED + Retry-After 헤더 (공통 에러 포맷)
- * - 클라이언트 IP는 request.getRemoteAddr(). 프록시 뒤에서 X-Forwarded-For를 쓰려면
- *   server.forward-headers-strategy=framework 설정이 필요하다(설정 없이 헤더를 직접 믿으면 IP 위조가 가능해 읽지 않는다).
+ * - 클라이언트 IP는 request.getRemoteAddr(). 프록시 뒤에서 X-Forwarded-For를 쓰려면 server.forward-headers-strategy 설정이 필요하다
+ *   (prod 기본 native: 내부 프록시가 보낸 XFF만 신뢰하고 오른쪽 기준으로 판정해 위조에 강하다. 설정 없이 헤더를 직접 믿으면 IP 위조가 가능해 읽지 않는다).
  *
  * // SCALE: 인메모리 단일 인스턴스 전제 (SlidingWindowRateLimiter 참고)
  */

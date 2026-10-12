@@ -77,6 +77,8 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(corsProperties.allowedOrigins());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
+        // 429 응답의 Retry-After 를 브라우저(프론트)가 읽을 수 있게 노출한다 (같은 도메인 프록시면 CORS 자체가 불필요하지만 설정은 유지)
+        configuration.setExposedHeaders(List.of("Retry-After"));
         configuration.setAllowCredentials(false);
         configuration.setMaxAge(3600L);
 

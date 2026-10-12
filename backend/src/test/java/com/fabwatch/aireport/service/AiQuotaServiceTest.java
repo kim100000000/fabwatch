@@ -119,4 +119,61 @@ class AiQuotaServiceTest {
         assertThatThrownBy(() -> service(repoWithUsed(3), "claude", 3, NOW).reserve(1L, 1L))
                 .isInstanceOf(BusinessException.class);
     }
+
+    // ---- 사용자별 일일 한도 ----
+
+    private static AiCallLogRepository repoWithUsed(long total, long byUser) {
+        AiCallLogRepository repo = repoWithUsed(total);
+        when(repo.countByUserIdAndRequestedAtGreaterThanEqualAndRequestedAtLessThan(any(), any(), any())).thenReturn(byUser);
+        return repo;
+    }
+
+    @Test
+    @DisplayName("개인 한도(기본 5): 4건 사용 시 허용, 5건 사용 시 403 — 메시지는 '개인 일일 한도'")
+    void reserve_userQuotaBoundary() {
+        service(repoWithUsed(10, 4), "claude", 20, NOW).reserve(1L, 3L);
+
+        AiCallLogRepository repo = repoWithUsed(10, 5);
+        assertThatThrownBy(() -> service(repo, "claude", 20, NOW).reserve(1L, 3L))
+                .isInstanceOfSatisfying(BusinessException.class, e -> {
+                    assertThat(e.getErrorCode()).isEqualTo(ErrorCode.AI_QUOTA_EXCEEDED);
+                    assertThat(e.getMessage()).contains("개인 일일 한도(5건)");
+                });
+        verify(repo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("전체 한도가 먼저 검사된다 — 전체 초과면 메시지는 '전체 일일 한도', 개인 집계는 조회하지 않는다")
+    void reserve_globalCheckedFirst() {
+        AiCallLogRepository repo = repoWithUsed(20, 0);
+
+        assertThatThrownBy(() -> service(repo, "claude", 20, NOW).reserve(1L, 3L))
+                .isInstanceOfSatisfying(BusinessException.class, e ->
+                        assertThat(e.getMessage()).contains("전체 일일 한도(20건)"));
+        verify(repo, never()).countByUserIdAndRequestedAtGreaterThanEqualAndRequestedAtLessThan(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("개인 집계도 같은 KST 일자 구간 [00:00, 다음날 00:00)과 해당 userId로 조회한다")
+    void reserve_userCountUsesSameWindow() {
+        AiCallLogRepository repo = repoWithUsed(0, 0);
+        service(repo, "claude", 20, Instant.parse("2026-10-02T15:00:00Z")).reserve(1L, 42L);
+
+        verify(repo).countByUserIdAndRequestedAtGreaterThanEqualAndRequestedAtLessThan(
+                org.mockito.ArgumentMatchers.eq(42L),
+                org.mockito.ArgumentMatchers.eq(Instant.parse("2026-10-02T15:00:00Z")),
+                org.mockito.ArgumentMatchers.eq(Instant.parse("2026-10-03T15:00:00Z")));
+    }
+
+    @Test
+    @DisplayName("개인 한도 설정값을 따른다 (userDailyQuota=2: 1건 허용 / 2건 거부)")
+    void reserve_followsConfiguredUserQuota() {
+        AiProperties two = new AiProperties("claude", "", "m", 4096, 20, 2, 30,
+                "https://api.anthropic.com", "2023-06-01", 0, 2, 10, 5, "low");
+        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+
+        new AiQuotaService(repoWithUsed(0, 1), two, clock).reserve(1L, 1L);
+        assertThatThrownBy(() -> new AiQuotaService(repoWithUsed(0, 2), two, clock).reserve(1L, 1L))
+                .isInstanceOf(BusinessException.class);
+    }
 }
